@@ -26,6 +26,7 @@ import {
 import { resolveCodexPlanType } from '@/utils/quota/resolvers';
 import { getCredentialScopedQuotaState } from '@/utils/quota/credentialScope';
 import { isCodexMainQuotaModelScope, isCodexMainQuotaWindow } from '@/utils/quota/codexQuota';
+import { parsePluginQuotaContract } from '@/utils/quota/pluginQuota';
 
 export type AccountQuotaStatus =
   | 'unknown'
@@ -81,6 +82,8 @@ export interface AccountQuotaStores {
 export interface AccountQuotaOverrides {
   codexQuotaBySelectionKey?: Map<string, CodexQuotaState>;
   codexHeaderSnapshotBySelectionKey?: Map<string, UsageHeaderSnapshot>;
+  /** Evaluation time, so plugin quota freshness stays deterministic in tests. */
+  nowMs?: number;
 }
 
 export type AccountGroupedQuotaAvailabilityState = 'available' | 'partial' | 'exhausted';
@@ -1035,6 +1038,24 @@ export const resolveAccountQuota = (
     return quotaFromXaiBilling(quota.billing, filePlanType, {
       fetchedAtMs: quota.fetchedAtMs,
     });
+  }
+
+  // Generic plugin quota is the last resort: it runs only after every built-in
+  // provider adapter declined, so richer built-in data always stays
+  // authoritative. This branch must never test a provider name.
+  const pluginContract = parsePluginQuotaContract(file, overrides?.nowMs);
+  if (pluginContract) {
+    return quotaFromRemainingWindows(
+      pluginContract.windows.map((window) => ({
+        remainingPercent: null,
+        usedPercent: window.usedPercent,
+        resetLabel: window.resetAt,
+        resetAtMs: window.resetAtMs,
+        resetAccuracy: window.resetAccuracy,
+      })),
+      filePlanType,
+      { observedAtMs: pluginContract.observedAtMs ?? undefined }
+    );
   }
 
   return emptyQuota(filePlanType);

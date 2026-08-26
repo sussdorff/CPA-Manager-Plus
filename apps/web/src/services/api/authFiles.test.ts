@@ -29,6 +29,13 @@ vi.mock('./client', () => ({
 
 import { applyAuthFileFieldsPatchToRecord, authFilesApi } from './authFiles';
 import { sha256RawTextHex } from '@/utils/apiKeyHash';
+import type { AuthFileItem } from '@/types';
+import {
+  PLUGIN_QUOTA_SCHEMA,
+  SUPPORTED_PLUGIN_QUOTA_VERSIONS,
+  parsePluginQuotaContract,
+} from '@/utils/quota/pluginQuota';
+import cursorPluginQuotaContract from '@/utils/quota/pluginQuotaCursorV1.json';
 
 beforeEach(() => {
   mocks.get.mockReset();
@@ -1614,5 +1621,81 @@ describe('applyAuthFileFieldsPatchToRecord', () => {
       cloak_sensitive_words: 'canonical',
       cloak_cache_user_id: 'false',
     });
+  });
+});
+
+describe('generic plugin quota contract carried by auth metadata', () => {
+  // This fixture is the golden payload produced by the cliproxy-cursor-acp
+  // adapter test. Consuming it here proves the two repositories agree on the
+  // contract without a Cursor-specific translation layer on this side.
+  const NOW_MS = Date.parse('2026-08-26T09:20:00Z');
+
+  it('parses the producer fixture into normalized windows', () => {
+    const file: AuthFileItem = {
+      name: 'cursor-acp-account.json',
+      provider: 'cursor-acp',
+      metadata: { status: 'available', plugin_quota: cursorPluginQuotaContract },
+    };
+
+    const contract = parsePluginQuotaContract(file, NOW_MS);
+
+    expect(contract).toMatchObject({
+      provider: 'cursor-acp',
+      version: 1,
+      availability: 'available',
+      stale: false,
+      observedAtMs: Date.parse('2026-08-26T09:15:00Z'),
+      ttlSeconds: 900,
+    });
+    expect(contract?.windows).toEqual([
+      {
+        id: 'subscription',
+        label: 'Monthly usage',
+        kind: 'monthly',
+        unit: 'requests',
+        used: 125,
+        limit: 500,
+        remaining: 375,
+        usedPercent: 25,
+        unlimited: false,
+        windowStartMs: Date.parse('2026-08-01T00:00:00Z'),
+        windowEndMs: Date.parse('2026-09-01T00:00:00Z'),
+        resetAt: '2026-09-01T00:00:00Z',
+        resetAtMs: Date.parse('2026-09-01T00:00:00Z'),
+        resetAccuracy: 'exact',
+      },
+    ]);
+  });
+
+  it('agrees with the producer on the published schema and version', () => {
+    expect(cursorPluginQuotaContract.schema).toBe(PLUGIN_QUOTA_SCHEMA);
+    expect(SUPPORTED_PLUGIN_QUOTA_VERSIONS).toContain(cursorPluginQuotaContract.version);
+  });
+
+  it('carries no credential material in the published contract', () => {
+    const encoded = JSON.stringify(cursorPluginQuotaContract);
+    for (const marker of [
+      'accessToken',
+      'access_token',
+      'Cookie',
+      'WorkosCursorSessionToken',
+      'profile_dir',
+      'profileDir',
+      'eyJ',
+    ]) {
+      expect(encoded).not.toContain(marker);
+    }
+  });
+
+  it('reports a stale observation as unavailable', () => {
+    const file: AuthFileItem = {
+      name: 'cursor-acp-account.json',
+      provider: 'cursor-acp',
+      metadata: { plugin_quota: cursorPluginQuotaContract },
+    };
+
+    const contract = parsePluginQuotaContract(file, NOW_MS + 3_600_000);
+
+    expect(contract).toMatchObject({ availability: 'unavailable', stale: true, windows: [] });
   });
 });

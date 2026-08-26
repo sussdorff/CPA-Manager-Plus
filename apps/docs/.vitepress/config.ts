@@ -147,6 +147,7 @@ const enSidebar: DefaultTheme.Sidebar = [
     items: [
       { text: 'FAQ', link: '/en/reference/faq' },
       { text: 'Capability Matrix', link: '/en/reference/capability-matrix' },
+      { text: 'Plugin Quota Contract', link: '/en/reference/plugin-quota-contract' },
       { text: 'Providers And Compatibility APIs', link: '/en/gateway/providers' },
       { text: 'Releases', link: '/en/reference/releases' },
       { text: 'Migrate From CPA-Manager', link: '/en/migration/from-cpa-manager' },

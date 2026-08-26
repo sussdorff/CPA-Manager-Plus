@@ -313,7 +313,7 @@ export const buildAccountQuotaSnapshotWriteEntries = (
       (definition) => definition.provider !== 'summary'
     );
     const target = targets.get(row.selectionKey);
-    if (!target) return [];
+    if (!target || !isSnapshotCapableProvider(row.provider)) return [];
     const observation = options.getObservation?.(row);
     if (observationProviderConfigured && !isUsableObservation(observation)) return [];
     if (definitions.length === 0 && !observation) return [];
@@ -348,6 +348,17 @@ const isUsableObservation = (
   Number.isFinite(observation.observed_at_ms) &&
   observation.observed_at_ms > 0;
 
+/**
+ * Providers the quota snapshot service persists history for. Generic plugin
+ * windows are displayed but not persisted: the snapshot service only accepts
+ * these built-in providers, so a plugin-backed row must not produce a write it
+ * would reject.
+ */
+const SNAPSHOT_CAPABLE_PROVIDERS = ['codex', 'claude', 'antigravity', 'kimi', 'xai'];
+
+const isSnapshotCapableProvider = (provider: string): boolean =>
+  SNAPSHOT_CAPABLE_PROVIDERS.includes(provider);
+
 export const buildAccountQuotaSnapshotQueryAccounts = (
   rows: AccountRow[]
 ): AccountQuotaSnapshotQueryAccount[] => {
@@ -356,9 +367,7 @@ export const buildAccountQuotaSnapshotQueryAccounts = (
   );
   return rows.flatMap((row) => {
     const target = targets.get(row.selectionKey);
-    if (!target || !['codex', 'claude', 'antigravity', 'kimi', 'xai'].includes(row.provider)) {
-      return [];
-    }
+    if (!target || !isSnapshotCapableProvider(row.provider)) return [];
     return [
       {
         row_key: row.selectionKey,

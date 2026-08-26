@@ -18,6 +18,7 @@ import {
   resolveAbsoluteQuotaReset,
 } from '@/utils/quota/formatters';
 import { inferCodexQuotaScopeFromProviderWindowId } from '@/utils/quota/codexQuota';
+import { parsePluginQuotaContract, type PluginQuotaWindow } from '@/utils/quota/pluginQuota';
 import type { AccountRow } from './accountRows';
 import type { AccountQuotaStores } from './accountQuotaSummary';
 
@@ -38,6 +39,7 @@ export type AccountQuotaWindowSource =
   | 'antigravity'
   | 'kimi'
   | 'xai'
+  | 'plugin'
   | 'summary';
 
 export interface AccountQuotaDisplayWindow {
@@ -669,6 +671,53 @@ const buildXaiQuotaDisplayWindows = (
   return windows;
 };
 
+/**
+ * Renders the versioned, provider-neutral plugin quota contract.
+ *
+ * This path is deliberately free of provider conditions: any plugin that
+ * publishes the contract renders here. It runs only after every built-in
+ * provider adapter declined, so richer built-in data always wins.
+ */
+const buildPluginQuotaDisplayWindows = (
+  row: AccountRow,
+  options: BuildAccountQuotaDisplayWindowsOptions
+): AccountQuotaDisplayWindow[] => {
+  const contract = parsePluginQuotaContract(row.raw, options.nowMs);
+  if (!contract?.windows.length) return [];
+  return contract.windows.map((window) =>
+    buildAccountQuotaDisplayWindow({
+      key: window.id,
+      label: options.translateQuotaWindowLabel(window.label),
+      kind: window.kind,
+      remainingPercent: remainingPercentFromUsed(window.usedPercent),
+      usedPercent: window.usedPercent,
+      resetLabel: formatDisplayResetTime(window.resetAt || undefined),
+      resetAtMs: window.resetAtMs,
+      resetAccuracy: window.resetAccuracy,
+      limitWindowSeconds: pluginWindowSeconds(window),
+      amountLabel: formatPluginAmountLabel(window),
+      cycleStartMs: window.windowStartMs,
+      cycleEndMs: window.windowEndMs ?? window.resetAtMs,
+      // A plugin window describes the credential as a whole unless and until
+      // the contract gains an explicit model scope.
+      modelScope: { kind: 'all', complete: true },
+      source: 'plugin',
+      observationSource: 'api_query',
+      observedAtMs: contract.observedAtMs,
+      nowMs: options.nowMs,
+    })
+  );
+};
+
+const pluginWindowSeconds = (window: PluginQuotaWindow): number | null => {
+  const endMs = window.windowEndMs ?? window.resetAtMs;
+  if (window.windowStartMs === null || endMs === null || endMs <= window.windowStartMs) return null;
+  return Math.round((endMs - window.windowStartMs) / 1000);
+};
+
+const formatPluginAmountLabel = (window: PluginQuotaWindow): string | undefined =>
+  window.used !== null && window.limit !== null ? `${window.used} / ${window.limit}` : undefined;
+
 const buildSummaryQuotaDisplayWindow = (
   row: AccountRow,
   options: BuildAccountQuotaDisplayWindowsOptions
@@ -718,6 +767,9 @@ export const buildAccountQuotaDisplayWindows = (
     const windows = buildXaiQuotaDisplayWindows(row, options);
     if (windows.length) return windows;
   }
+
+  const pluginWindows = buildPluginQuotaDisplayWindows(row, options);
+  if (pluginWindows.length) return pluginWindows;
 
   return buildSummaryQuotaDisplayWindow(row, options);
 };
