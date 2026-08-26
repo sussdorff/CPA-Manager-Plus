@@ -26,7 +26,7 @@ FROM alpine:3.21
 # tell a fork build apart from an upstream build by inspecting the image alone.
 ARG VERSION=dev
 ARG REVISION=unknown
-ARG SOURCE=https://github.com/seakee/CPA-Manager-Plus
+ARG SOURCE=unknown
 ARG UPSTREAM_SOURCE=https://github.com/seakee/CPA-Manager-Plus
 ARG UPSTREAM_REVISION=unknown
 

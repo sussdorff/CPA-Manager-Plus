@@ -499,6 +499,9 @@ jobs:
       DOCKERHUB_IMAGE: ${{ github.repository_owner }}/cpa-manager-plus
       GHCR_IMAGE: ghcr.io/${{ github.repository_owner }}/cpa-manager-plus
       UPSTREAM_SOURCE: https://github.com/seakee/CPA-Manager-Plus
+      # Update this value whenever the fork is synchronized with upstream.
+      # It intentionally names the upstream base, not this fork's release SHA.
+      UPSTREAM_REVISION: b1179618bad2740ae6d441be9b1b1b800379cfc3
 
     steps:
       - name: Checkout release source
@@ -600,7 +603,7 @@ jobs:
             REVISION=${{ github.sha }}
             SOURCE=${{ github.server_url }}/${{ github.repository }}
             UPSTREAM_SOURCE=${{ env.UPSTREAM_SOURCE }}
-            UPSTREAM_REVISION=${{ github.sha }}
+            UPSTREAM_REVISION=${{ env.UPSTREAM_REVISION }}
 
       # Only upstream owns the DockerHub repository overview text.
       - name: Update DockerHub overview
