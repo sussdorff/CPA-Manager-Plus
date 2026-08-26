@@ -24,6 +24,9 @@ const MAX_WINDOWS = 32;
 const MAX_TEXT_LENGTH = 128;
 const MAX_COUNT = 1e15;
 const MAX_TTL_SECONDS = 7 * 24 * 60 * 60;
+// Permit a small clock-skew tolerance, but do not let a producer make an
+// observation fresh indefinitely by reporting a materially future timestamp.
+const MAX_FUTURE_OBSERVATION_MS = 5 * 60 * 1000;
 const MIN_TIMESTAMP_MS = Date.UTC(2000, 0, 1);
 const MAX_TIMESTAMP_MS = Date.UTC(2100, 0, 1);
 
@@ -225,8 +228,11 @@ export const parsePluginQuotaContract = (
   const ttlSecondsRaw = readCount(payload.ttl_seconds);
   const ttlSeconds =
     ttlSecondsRaw !== null && ttlSecondsRaw > 0 ? Math.min(ttlSecondsRaw, MAX_TTL_SECONDS) : null;
-  const stale =
-    observedAtMs !== null && ttlSeconds !== null && nowMs > observedAtMs + ttlSeconds * 1000;
+  const freshnessValid =
+    observedAtMs !== null &&
+    ttlSeconds !== null &&
+    observedAtMs <= nowMs + MAX_FUTURE_OBSERVATION_MS;
+  const stale = !freshnessValid || nowMs > (observedAtMs ?? nowMs) + (ttlSeconds ?? 0) * 1000;
   const available = payload.availability === 'available' && !stale;
 
   return {

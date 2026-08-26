@@ -166,6 +166,11 @@ describe('generic plugin quota in the account summary', () => {
     ['malformed windows', contract({ windows: 'not-an-array' })],
     ['window without identity or values', contract({ windows: [{ label: 'Nameless' }] })],
     ['stale observation', contract({ observed_at: '2026-08-26T07:00:00Z', ttl_seconds: 900 })],
+    ['missing observation timestamp', contract({ observed_at: undefined })],
+    ['invalid observation timestamp', contract({ observed_at: 'not-a-timestamp' })],
+    ['materially future observation timestamp', contract({ observed_at: '2026-08-26T09:26:00Z' })],
+    ['missing freshness ttl', contract({ ttl_seconds: undefined })],
+    ['invalid freshness ttl', contract({ ttl_seconds: 0 })],
   ])('produces a bounded unavailable quota for a %s payload', (_name, payload) => {
     const file = pluginFile(payload);
     const quota = resolveAccountQuota(file, emptyStores(), { nowMs: NOW_MS });

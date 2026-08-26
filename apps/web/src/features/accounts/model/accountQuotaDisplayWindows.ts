@@ -715,8 +715,17 @@ const pluginWindowSeconds = (window: PluginQuotaWindow): number | null => {
   return Math.round((endMs - window.windowStartMs) / 1000);
 };
 
-const formatPluginAmountLabel = (window: PluginQuotaWindow): string | undefined =>
-  window.used !== null && window.limit !== null ? `${window.used} / ${window.limit}` : undefined;
+const formatPluginAmountLabel = (window: PluginQuotaWindow): string | undefined => {
+  const unit = window.unit ? ` ${window.unit}` : '';
+  if (window.used !== null && window.limit !== null)
+    return `${window.used} / ${window.limit}${unit}`;
+  if (window.remaining !== null && window.limit !== null) {
+    return `${window.remaining} / ${window.limit}${unit} remaining`;
+  }
+  if (window.remaining !== null) return `${window.remaining}${unit} remaining`;
+  if (window.used !== null) return `${window.used}${unit} used`;
+  return undefined;
+};
 
 const buildSummaryQuotaDisplayWindow = (
   row: AccountRow,

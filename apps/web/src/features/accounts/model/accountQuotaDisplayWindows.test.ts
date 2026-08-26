@@ -615,6 +615,12 @@ describe('generic plugin quota windows', () => {
     ...overrides,
   });
 
+  const validContract = (overrides: Record<string, unknown> = {}) => ({
+    ...cursorPluginQuotaContract,
+    provider: 'acme-llm',
+    ...overrides,
+  });
+
   it('renders a Cursor plugin contract emitted by the producer', () => {
     const windows = buildAccountQuotaDisplayWindows(
       buildRow(pluginFile('cursor-acp', cursorPluginQuotaContract)),
@@ -634,7 +640,7 @@ describe('generic plugin quota windows', () => {
       cycleStartMs: Date.parse('2026-08-01T00:00:00Z'),
       cycleEndMs: Date.parse('2026-09-01T00:00:00Z'),
       observedAtMs: Date.parse('2026-08-26T09:15:00Z'),
-      amountLabel: '125 / 500',
+      amountLabel: '125 / 500 requests',
     });
     expect(windows[0].resetLabel).not.toBe('-');
   });
@@ -692,12 +698,50 @@ describe('generic plugin quota windows', () => {
       source: 'plugin',
       usedPercent: 20,
       remainingPercent: 80,
-      amountLabel: '40 / 200',
+      amountLabel: '40 / 200 credits',
       // The contract's `derived` accuracy has no display equivalent, so it is
       // presented as an estimate rather than a provider-stated exact time.
       resetAccuracy: 'estimated',
     });
     expect(getQuotaWindowShortLabel(windows[0])).toBe('5H');
+  });
+
+  it('keeps plugin consumption amounts when only remaining or used is available', () => {
+    const windows = buildAccountQuotaDisplayWindows(
+      buildRow(
+        pluginFile(
+          'acme-llm',
+          validContract({
+            windows: [
+              {
+                id: 'used-limit',
+                used: 12,
+                limit: 20,
+                unit: 'requests',
+                reset_at: '2026-09-01T00:00:00Z',
+              },
+              {
+                id: 'remaining-limit',
+                remaining: 8,
+                limit: 20,
+                unit: 'credits',
+                reset_at: '2026-09-01T00:00:00Z',
+              },
+              { id: 'remaining', remaining: 8, unit: 'credits', reset_at: '2026-09-01T00:00:00Z' },
+              { id: 'used', used: 12, unit: 'requests', reset_at: '2026-09-01T00:00:00Z' },
+            ],
+          })
+        )
+      ),
+      { stores: emptyStores(), translateQuotaWindowLabel, t, nowMs: NOW_MS }
+    );
+
+    expect(windows.map((window) => window.amountLabel)).toEqual([
+      '12 / 20 requests',
+      '8 / 20 credits remaining',
+      '8 credits remaining',
+      '12 requests used',
+    ]);
   });
 });
 
@@ -729,6 +773,11 @@ describe('generic plugin quota failure isolation', () => {
     ['a null payload', null],
     ['an unavailable contract', valid({ availability: 'unavailable' })],
     ['a stale observation', valid({ observed_at: '2026-08-26T07:00:00Z' })],
+    ['a missing observation timestamp', valid({ observed_at: undefined })],
+    ['an invalid observation timestamp', valid({ observed_at: 'not-a-timestamp' })],
+    ['a materially future observation timestamp', valid({ observed_at: '2026-08-26T09:26:00Z' })],
+    ['a missing freshness ttl', valid({ ttl_seconds: undefined })],
+    ['an invalid freshness ttl', valid({ ttl_seconds: 0 })],
     ['non-array windows', valid({ windows: { id: 'subscription' } })],
     ['windows without identity', valid({ windows: [{ label: 'Nameless', used_percent: 10 }] })],
     ['windows with nothing to show', valid({ windows: [{ id: 'empty' }] })],
