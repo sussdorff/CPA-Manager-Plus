@@ -19,6 +19,27 @@ RUN go mod download
 RUN CGO_ENABLED=0 GOOS=$TARGETOS GOARCH=$TARGETARCH go build -o /out/cpa-manager-plus ./cmd/cpa-manager-plus
 
 FROM alpine:3.21
+
+# Provenance for the fork-owned image. SOURCE and REVISION identify the fork
+# commit this image was built from; UPSTREAM_SOURCE and UPSTREAM_REVISION record
+# the CPA-Manager-Plus commit the fork was synchronized with, so an operator can
+# tell a fork build apart from an upstream build by inspecting the image alone.
+ARG VERSION=dev
+ARG REVISION=unknown
+ARG SOURCE=https://github.com/seakee/CPA-Manager-Plus
+ARG UPSTREAM_SOURCE=https://github.com/seakee/CPA-Manager-Plus
+ARG UPSTREAM_REVISION=unknown
+
+LABEL org.opencontainers.image.title="CPA Manager Plus Manager Server" \
+      org.opencontainers.image.description="CPA Manager Plus Manager Server with generic plugin quota windows" \
+      org.opencontainers.image.version="$VERSION" \
+      org.opencontainers.image.revision="$REVISION" \
+      org.opencontainers.image.source="$SOURCE" \
+      org.opencontainers.image.url="$SOURCE" \
+      org.opencontainers.image.documentation="$SOURCE#readme" \
+      org.cpamp.fork.upstream.source="$UPSTREAM_SOURCE" \
+      org.cpamp.fork.upstream.revision="$UPSTREAM_REVISION"
+
 RUN apk add --no-cache ca-certificates wget tzdata
 WORKDIR /app
 COPY --from=service-build /out/cpa-manager-plus /usr/local/bin/cpa-manager-plus

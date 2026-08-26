@@ -493,8 +493,12 @@ jobs:
     env:
       RELEASE_TAG: ${{ needs.preflight.outputs.release_tag }}
       DRY_RUN: ${{ needs.preflight.outputs.dry_run }}
-      DOCKERHUB_IMAGE: seakee/cpa-manager-plus
-      GHCR_IMAGE: ghcr.io/seakee/cpa-manager-plus
+      # Fork-owned image namespace. Derived from the repository owner so a fork
+      # publishes only under its own namespace and never under upstream's.
+      UPSTREAM_OWNER: seakee
+      DOCKERHUB_IMAGE: ${{ github.repository_owner }}/cpa-manager-plus
+      GHCR_IMAGE: ghcr.io/${{ github.repository_owner }}/cpa-manager-plus
+      UPSTREAM_SOURCE: https://github.com/seakee/CPA-Manager-Plus
 
     steps:
       - name: Checkout release source
@@ -517,8 +521,17 @@ jobs:
         run: |
           set -euo pipefail
 
-          if [ "${DOCKERHUB_IMAGE}" != "seakee/cpa-manager-plus" ]; then
-            echo "Docker image name must be seakee/cpa-manager-plus" >&2
+          owner="${GITHUB_REPOSITORY%%/*}"
+          if [ "${DOCKERHUB_IMAGE}" != "${owner}/cpa-manager-plus" ]; then
+            echo "Docker image name must be ${owner}/cpa-manager-plus" >&2
+            exit 1
+          fi
+
+          # Both image names are derived from the repository owner, so pinning
+          # them to this owner is what stops a fork from publishing into
+          # upstream's namespace even if it inherits upstream's credentials.
+          if [ "${GHCR_IMAGE}" != "ghcr.io/${owner}/cpa-manager-plus" ]; then
+            echo "GHCR image name must be ghcr.io/${owner}/cpa-manager-plus" >&2
             exit 1
           fi
 
@@ -566,9 +579,12 @@ jobs:
           labels: |
             org.opencontainers.image.title=CPA Manager Plus
             org.opencontainers.image.description=CPA Manager Plus Manager Server container image
+            org.opencontainers.image.version=${{ env.RELEASE_TAG }}
+            org.opencontainers.image.revision=${{ github.sha }}
             org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
             org.opencontainers.image.url=${{ github.server_url }}/${{ github.repository }}
             org.opencontainers.image.documentation=${{ github.server_url }}/${{ github.repository }}#readme
+            org.cpamp.fork.upstream.source=${{ env.UPSTREAM_SOURCE }}
 
       - name: Build and publish Manager Server image
         uses: docker/build-push-action@53b7df96c91f9c12dcc8a07bcb9ccacbed38856a # v7.3.0
@@ -581,9 +597,14 @@ jobs:
           labels: ${{ steps.meta.outputs.labels }}
           build-args: |
             VERSION=${{ env.RELEASE_TAG }}
+            REVISION=${{ github.sha }}
+            SOURCE=${{ github.server_url }}/${{ github.repository }}
+            UPSTREAM_SOURCE=${{ env.UPSTREAM_SOURCE }}
+            UPSTREAM_REVISION=${{ github.sha }}
 
+      # Only upstream owns the DockerHub repository overview text.
       - name: Update DockerHub overview
-        if: env.DRY_RUN != 'true' && steps.docker_targets.outputs.dockerhub_enabled == 'true'
+        if: env.DRY_RUN != 'true' && steps.docker_targets.outputs.dockerhub_enabled == 'true' && github.repository_owner == env.UPSTREAM_OWNER
         uses: peter-evans/dockerhub-description@1b9a80c056b620d92cedb9d9b5a223409c68ddfa # v5.0.0
         with:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
