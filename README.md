@@ -229,6 +229,10 @@ Build the Docker stack locally:
 docker compose -f docker-compose.manager.yml up --build
 ```
 
+Leave `CPAMP_IMAGE` unset for this. `--build` and a digest-pinned `CPAMP_IMAGE`
+are mutually exclusive; see
+[Deploying a pinned image](#deploying-a-pinned-image).
+
 ## Release
 
 - `npm run build` creates a single-file `apps/web/dist/index.html`.
@@ -335,6 +339,20 @@ curl -s http://127.0.0.1:18317/health
 
 A tag can be repointed at a different build; a digest cannot. Record the digest
 you deployed alongside the fork commit it was built from.
+
+**Do not pass `--build` here.** `docker-compose.manager.yml` carries both a
+`build:` section and an `image:` name so a single file serves both workflows,
+but they are mutually exclusive per invocation:
+
+| Workflow | `CPAMP_IMAGE` | Command |
+| --- | --- | --- |
+| Build locally | unset (defaults to `cpa-manager-plus:local`) | `up --build` |
+| Deploy a pinned image | digest reference | `up -d`, no `--build` |
+
+`up --build` with a digest-pinned `CPAMP_IMAGE` fails, because a locally built
+image cannot be tagged with a digest. Even where a build did succeed, it would
+replace the image you pinned with one built from the local working tree, which
+is exactly what pinning a digest exists to prevent.
 
 ### Evolving the quota contract
 

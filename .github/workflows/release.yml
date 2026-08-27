@@ -524,8 +524,15 @@ jobs:
         run: |
           set -euo pipefail
 
-          owner="${GITHUB_REPOSITORY%%/*}"
-          if [ "${DOCKERHUB_IMAGE}" != "${owner}/cpa-manager-plus" ]; then
+          # Registry namespaces are lowercase-only, but github.repository_owner
+          # preserves the account's original casing. A fork owned by "MyOrg"
+          # would otherwise derive ghcr.io/MyOrg/cpa-manager-plus and be
+          # rejected on push, so both sides are lowercased before comparison.
+          owner="$(printf '%s' "${GITHUB_REPOSITORY%%/*}" | tr '[:upper:]' '[:lower:]')"
+          dockerhub_image="$(printf '%s' "${DOCKERHUB_IMAGE}" | tr '[:upper:]' '[:lower:]')"
+          ghcr_image="$(printf '%s' "${GHCR_IMAGE}" | tr '[:upper:]' '[:lower:]')"
+
+          if [ "${dockerhub_image}" != "${owner}/cpa-manager-plus" ]; then
             echo "Docker image name must be ${owner}/cpa-manager-plus" >&2
             exit 1
           fi
@@ -533,15 +540,15 @@ jobs:
           # Both image names are derived from the repository owner, so pinning
           # them to this owner is what stops a fork from publishing into
           # upstream's namespace even if it inherits upstream's credentials.
-          if [ "${GHCR_IMAGE}" != "ghcr.io/${owner}/cpa-manager-plus" ]; then
+          if [ "${ghcr_image}" != "ghcr.io/${owner}/cpa-manager-plus" ]; then
             echo "GHCR image name must be ghcr.io/${owner}/cpa-manager-plus" >&2
             exit 1
           fi
 
-          images="${GHCR_IMAGE}"
+          images="${ghcr_image}"
           dockerhub_enabled=false
           if [ "${DRY_RUN}" != "true" ] && [ -n "${DOCKERHUB_USERNAME}" ] && [ -n "${DOCKERHUB_TOKEN}" ]; then
-            images="${images}"$'\n'"${DOCKERHUB_IMAGE}"
+            images="${images}"$'\n'"${dockerhub_image}"
             dockerhub_enabled=true
           elif [ "${DRY_RUN}" != "true" ]; then
             echo "::warning::DockerHub credentials are not both configured; DockerHub publish will be skipped."
@@ -552,6 +559,7 @@ jobs:
             echo "${images}"
             echo "EOF"
             echo "dockerhub_enabled=${dockerhub_enabled}"
+            echo "dockerhub_image=${dockerhub_image}"
           } >> "${GITHUB_OUTPUT}"
 
       - name: Login to GitHub Container Registry
@@ -612,7 +620,7 @@ jobs:
         with:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
-          repository: ${{ env.DOCKERHUB_IMAGE }}
+          repository: ${{ steps.docker_targets.outputs.dockerhub_image }}
           short-description: CPA Manager Plus with Dockerized Manager Server
           readme-filepath: ./README.md
 

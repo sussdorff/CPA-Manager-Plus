@@ -8,6 +8,19 @@
 # and confirm org.opencontainers.image.source, .revision, and .version point at
 # the fork, and org.cpamp.fork.upstream.revision names the synchronized
 # upstream commit.
+#
+# Building and digest-pinning are mutually exclusive. This file carries both a
+# `build:` section and an `image:` name so one file serves both workflows, but
+# only one of them applies per invocation:
+#
+#   - Local build:   leave CPAMP_IMAGE unset and run `up --build`. The image is
+#                    built here and tagged cpa-manager-plus:local.
+#   - Pinned deploy: set CPAMP_IMAGE to a digest and run `up -d` WITHOUT
+#                    --build. The digest is pulled as-is.
+#
+# `up --build` with a digest-pinned CPAMP_IMAGE fails: a locally built image
+# cannot be tagged with a digest, and a digest that a local build could satisfy
+# would defeat the point of pinning one.
 services:
   cpa-manager-plus:
     build:
