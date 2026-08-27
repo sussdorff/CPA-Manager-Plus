@@ -31,19 +31,29 @@ lifts only `priority` and `note` out of `AuthData.Metadata` and emits no
 `metadata` object, as of `v7.2.141` and `v7.2.143`. A plugin can publish a
 perfectly valid contract and CPAMP will still see nothing.
 
-Rendering plugin quota therefore requires a CLIProxyAPI build that copies the
-allowlisted plugin quota onto the list entry as `metadata.plugin_quota`. The
-copy is narrow by construction:
+Rendering plugin quota therefore requires a CLIProxyAPI build that projects the
+plugin quota onto the list entry as `metadata.plugin_quota`. The host does not
+pass the payload through; it rebuilds it from an allowlist:
 
-- `plugin_quota` is the only metadata key copied. Every other key, known or
+- `plugin_quota` is the only metadata key projected. Every other key, known or
   unknown, stays omitted, so credential material that also lives in auth
   metadata - `access_token`, `refresh_token`, raw `id_token` strings, cookies,
   profile directory paths, `StorageJSON`, raw upstream bodies - cannot reach
   CPAMP through this field.
-- The payload is copied only when it declares `schema: cliproxy.plugin.quota`
-  and a numeric `version`.
-- Within a well-formed contract, fields are copied verbatim, so a producer can
-  add optional fields without the proxy needing to learn them first.
+- The payload is projected only when it declares `schema:
+  cliproxy.plugin.quota` and a `version` the host implements.
+- **Within the contract, the host emits a version-1 field allowlist and drops
+  every unknown field.** Auth metadata is plugin-controlled all the way down, so
+  a well-formed envelope is no evidence that what it wraps is safe: a value
+  nested inside an otherwise valid contract is dropped exactly like one placed
+  beside it.
+- The allowlisted fields are themselves bounded - at most 32 windows, and text
+  values dropped rather than truncated past 256 bytes.
+
+The host allowlist is the version-1 envelope and window field set tabulated
+below, so a producer that follows this reference survives the projection intact.
+CPAMP's own parser is unchanged by this and still ignores fields it does not
+know; the host projection simply means an unknown field rarely reaches it.
 
 Against a CLIProxyAPI build without that change, `file.metadata` is absent and
 CPAMP degrades to the **no contract** state described below: the account keeps
@@ -153,6 +163,11 @@ raw upstream response bodies into auth metadata.
 
 - **Adding an optional field** does not change `version`. CPAMP ignores unknown
   fields, so older consumers keep working.
+- **An added optional field is not visible until the host learns it.**
+  CLIProxyAPI projects a fixed version-1 allowlist and drops fields outside it,
+  so a new optional field never reaches CPAMP until a CLIProxyAPI release adds
+  it to that allowlist. Ship the host first and the producer second, or the
+  field is silently absent rather than ignored.
 - **Changing the meaning of an existing field, or adding a required field,**
   requires incrementing `version`. Consumers ignore versions they do not
   implement, so an unrecognized version degrades to "no contract" rather than to
