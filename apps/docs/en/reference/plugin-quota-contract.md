@@ -16,12 +16,38 @@ same parser and renderer serve every plugin that emits the contract.
 
 ## Where the payload lives
 
-CLIProxyAPI exposes a plugin's `AuthData.Metadata` map on each auth record. The
-contract occupies a single key:
+A plugin writes the contract into its `AuthData.Metadata` map under a single
+key, and CPAMP reads it from each entry of
 
 ```
-metadata.plugin_quota
+GET /v0/management/auth-files   ->   file.metadata.plugin_quota
 ```
+
+### This requires a CLIProxyAPI build that exposes the key
+
+**Stock CLIProxyAPI does not put auth metadata on that list endpoint.**
+`buildAuthFileEntryLocked` in `internal/api/handlers/management/auth_files.go`
+lifts only `priority` and `note` out of `AuthData.Metadata` and emits no
+`metadata` object, as of `v7.2.141` and `v7.2.143`. A plugin can publish a
+perfectly valid contract and CPAMP will still see nothing.
+
+Rendering plugin quota therefore requires a CLIProxyAPI build that copies the
+allowlisted plugin quota onto the list entry as `metadata.plugin_quota`. The
+copy is narrow by construction:
+
+- `plugin_quota` is the only metadata key copied. Every other key, known or
+  unknown, stays omitted, so credential material that also lives in auth
+  metadata - `access_token`, `refresh_token`, raw `id_token` strings, cookies,
+  profile directory paths, `StorageJSON`, raw upstream bodies - cannot reach
+  CPAMP through this field.
+- The payload is copied only when it declares `schema: cliproxy.plugin.quota`
+  and a numeric `version`.
+- Within a well-formed contract, fields are copied verbatim, so a producer can
+  add optional fields without the proxy needing to learn them first.
+
+Against a CLIProxyAPI build without that change, `file.metadata` is absent and
+CPAMP degrades to the **no contract** state described below: the account keeps
+its existing empty quota summary and stays fully usable.
 
 Everything else in `metadata` keeps its existing meaning. A credential that
 publishes no `plugin_quota` key behaves exactly as it does today.
