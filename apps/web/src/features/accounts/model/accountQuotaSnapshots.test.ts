@@ -1030,3 +1030,39 @@ describe('account quota snapshots', () => {
     expect(reverse?.rateLimitResetCreditsAvailableCount).toBe(3);
   });
 });
+
+describe('plugin-backed rows and quota snapshot persistence', () => {
+  const pluginRow = {
+    key: 'acme-account.json',
+    selectionKey: 'acme-account.json',
+    fileName: 'acme-account.json',
+    provider: 'acme-llm',
+    authIndex: 'auth-1',
+    accountLabel: 'user@example.com',
+    raw: {
+      name: 'acme-account.json',
+      provider: 'acme-llm',
+      type: 'acme-llm',
+      auth_index: 'auth-1',
+      account: 'user@example.com',
+    },
+  } as unknown as AccountRow;
+
+  it('does not persist generic plugin windows the snapshot service would reject', () => {
+    const pluginWindow = makeDefinition({
+      key: 'subscription',
+      providerWindowId: 'subscription',
+      provider: 'plugin',
+      label: 'Monthly usage',
+      kind: 'monthly',
+    });
+
+    expect(
+      buildAccountQuotaSnapshotWriteEntries(
+        [pluginRow],
+        new Map([[pluginRow.selectionKey, [pluginWindow]]]),
+        { nowMs: 20_000 }
+      )
+    ).toEqual([]);
+  });
+});

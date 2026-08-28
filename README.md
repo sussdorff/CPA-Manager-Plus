@@ -229,6 +229,10 @@ Build the Docker stack locally:
 docker compose -f docker-compose.manager.yml up --build
 ```
 
+Leave `CPAMP_IMAGE` unset for this. `--build` and a digest-pinned `CPAMP_IMAGE`
+are mutually exclusive; see
+[Deploying a pinned image](#deploying-a-pinned-image).
+
 ## Release
 
 - `npm run build` creates a single-file `apps/web/dist/index.html`.
@@ -244,6 +248,120 @@ docker compose -f docker-compose.manager.yml up --build
 - Release publishing is serialized and has no automatic commit-log fallback;
   missing or mismatched notes fail closed. See [`docs/release.md`](docs/release.md)
   for recovery and required repository protections.
+
+## Maintaining This Fork
+
+This repository is a maintained fork of
+[seakee/CPA-Manager-Plus](https://github.com/seakee/CPA-Manager-Plus). It adds a
+versioned, provider-neutral **plugin quota contract** so any CLIProxyAPI plugin
+provider can display quota windows in the Accounts Quota tab without a
+provider-specific adapter. See
+[Plugin Quota Contract](apps/docs/en/reference/plugin-quota-contract.md).
+
+### Commit split: what goes upstream and what stays here
+
+Keep these two kinds of change in separate commits, always.
+
+| Kind                            | Contents                                                                                                                                                                                             | Destination                           |
+| ------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------- |
+| Provider-neutral product change | `apps/web/src/utils/quota/pluginQuota.ts`, `accountQuotaDisplayWindows.ts`, `accountQuotaSummary.ts`, `accountQuotaSnapshots.ts`, their tests, and `apps/docs/en/reference/plugin-quota-contract.md` | Intended for an upstream pull request |
+| Downstream image configuration  | `Dockerfile.manager-server`, `docker-compose.manager.yml`, `.github/workflows/release.yml`, this section of `README.md`                                                                              | Stays in the fork                     |
+
+The product commit must not mention the fork's image namespace, registry, or
+deployment. That is what makes it cherry-pickable upstream:
+
+```sh
+# Prepare an upstream pull request from the product commit alone.
+git log --oneline main..HEAD
+git cherry-pick <product-commit>
+```
+
+If a change would be useful to every CPAMP user, it belongs in the product
+commit. If it only describes how _this_ fork is built or deployed, it belongs in
+the downstream commit.
+
+### Synchronizing with upstream
+
+```sh
+git remote add upstream https://github.com/seakee/CPA-Manager-Plus.git   # once
+git fetch upstream
+git rebase upstream/main            # keeps the fork's commits on top
+npm ci && npm test && npm run type-check && npm run lint
+```
+
+Rebasing rather than merging keeps the product commit a clean, single-parent
+commit that upstream can accept. After a sync, record the upstream commit you
+landed on; it becomes the image's `UPSTREAM_REVISION`.
+
+Conflicts concentrate in `accountQuotaDisplayWindows.ts` and
+`accountQuotaSummary.ts`, where upstream adds built-in providers. The generic
+plugin branch must stay **last** in both dispatchers, after every built-in
+adapter, so built-in data remains authoritative.
+
+### Building and pinning the fork-owned image
+
+`.github/workflows/release.yml` builds a versioned multi-architecture image for
+`linux/amd64` and `linux/arm64`. It derives the image namespace from the
+repository owner and refuses to publish under any other namespace, so a fork can
+never publish into upstream's. Its `workflow_dispatch` dry run builds without
+publishing.
+
+To build locally:
+
+```sh
+docker build -f Dockerfile.manager-server \
+  --build-arg VERSION=v1.12.5-fork.1 \
+  --build-arg REVISION="$(git rev-parse HEAD)" \
+  --build-arg SOURCE=https://github.com/<owner>/CPA-Manager-Plus \
+  --build-arg UPSTREAM_REVISION="$(git rev-parse upstream/main)" \
+  -t cpa-manager-plus:local .
+```
+
+Confirm the provenance before deploying:
+
+```sh
+docker image inspect cpa-manager-plus:local --format '{{json .Config.Labels}}'
+```
+
+`org.opencontainers.image.source`, `.revision`, and `.version` must point at the
+fork, and `org.cpamp.fork.upstream.revision` must name the upstream commit the
+fork was synchronized with.
+
+### Deploying a pinned image
+
+Pin by digest, never by a moving tag:
+
+```sh
+export CPAMP_IMAGE=ghcr.io/<owner>/cpa-manager-plus@sha256:<digest>
+docker compose -f docker-compose.manager.yml up -d
+curl -s http://127.0.0.1:18317/health
+```
+
+A tag can be repointed at a different build; a digest cannot. Record the digest
+you deployed alongside the fork commit it was built from.
+
+**Do not pass `--build` here.** `docker-compose.manager.yml` carries both a
+`build:` section and an `image:` name so a single file serves both workflows,
+but they are mutually exclusive per invocation:
+
+| Workflow | `CPAMP_IMAGE` | Command |
+| --- | --- | --- |
+| Build locally | unset (defaults to `cpa-manager-plus:local`) | `up --build` |
+| Deploy a pinned image | digest reference | `up -d`, no `--build` |
+
+`up --build` with a digest-pinned `CPAMP_IMAGE` fails, because a locally built
+image cannot be tagged with a digest. Even where a build did succeed, it would
+replace the image you pinned with one built from the local working tree, which
+is exactly what pinning a digest exists to prevent.
+
+### Evolving the quota contract
+
+The contract is versioned. Add optional fields freely; consumers ignore unknown
+fields. Increment `version` only when an existing field changes meaning or a
+required field is added, and keep the previous version's parsing until every
+deployed producer has moved on. The full rules, including staleness and
+availability semantics, are in
+[Plugin Quota Contract](apps/docs/en/reference/plugin-quota-contract.md).
 
 ## Acknowledgements
 

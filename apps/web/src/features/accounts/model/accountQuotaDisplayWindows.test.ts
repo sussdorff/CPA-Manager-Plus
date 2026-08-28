@@ -13,6 +13,9 @@ import {
   buildQuotaCredentialIdentity,
   getQuotaCredentialStoreKey,
 } from '@/utils/quota/credentialScope';
+// The producer's golden contract fixture, copied verbatim from
+// cliproxy-cursor-acp so a producer change that drifts fails here too.
+import cursorPluginQuotaContract from '@/utils/quota/pluginQuotaCursorV1.json';
 
 const emptyStores = (): AccountQuotaStores => ({
   antigravityQuota: {},
@@ -595,5 +598,277 @@ describe('accountQuotaDisplayWindows', () => {
         t,
       })
     ).toEqual([]);
+  });
+});
+
+describe('generic plugin quota windows', () => {
+  const NOW_MS = Date.parse('2026-08-26T09:20:00Z');
+
+  const pluginFile = (
+    provider: string,
+    contract: unknown,
+    overrides: Partial<AuthFileItem> = {}
+  ): AuthFileItem => ({
+    name: `${provider}-account.json`,
+    provider,
+    metadata: { status: 'available', plugin_quota: contract },
+    ...overrides,
+  });
+
+  const validContract = (overrides: Record<string, unknown> = {}) => ({
+    ...cursorPluginQuotaContract,
+    provider: 'acme-llm',
+    ...overrides,
+  });
+
+  it('renders a Cursor plugin contract emitted by the producer', () => {
+    const windows = buildAccountQuotaDisplayWindows(
+      buildRow(pluginFile('cursor-acp', cursorPluginQuotaContract)),
+      { stores: emptyStores(), translateQuotaWindowLabel, t, nowMs: NOW_MS }
+    );
+
+    expect(windows).toHaveLength(1);
+    expect(windows[0]).toMatchObject({
+      key: 'subscription',
+      label: 'Monthly usage',
+      kind: 'monthly',
+      source: 'plugin',
+      usedPercent: 25,
+      remainingPercent: 75,
+      resetAtMs: Date.parse('2026-09-01T00:00:00Z'),
+      resetAccuracy: 'exact',
+      cycleStartMs: Date.parse('2026-08-01T00:00:00Z'),
+      cycleEndMs: Date.parse('2026-09-01T00:00:00Z'),
+      observedAtMs: Date.parse('2026-08-26T09:15:00Z'),
+      amountLabel: '125 / 500 requests',
+    });
+    expect(windows[0].resetLabel).not.toBe('-');
+  });
+
+  it('renders a non-Cursor plugin contract through the same parser and renderer', () => {
+    const windows = buildAccountQuotaDisplayWindows(
+      buildRow(
+        pluginFile('acme-llm', {
+          schema: 'cliproxy.plugin.quota',
+          version: 1,
+          provider: 'acme-llm',
+          availability: 'available',
+          observed_at: '2026-08-26T09:10:00Z',
+          ttl_seconds: 1800,
+          windows: [
+            {
+              id: 'burst',
+              label: 'Burst window',
+              kind: 'five_hour',
+              used_percent: 60,
+              window_start: '2026-08-26T06:00:00Z',
+              window_end: '2026-08-26T11:00:00Z',
+              reset_at: '2026-08-26T11:00:00Z',
+              reset_accuracy: 'exact',
+            },
+            {
+              id: 'weekly',
+              label: 'Weekly allowance',
+              kind: 'weekly',
+              unit: 'credits',
+              used: 40,
+              limit: 200,
+              remaining: 160,
+              reset_at: '2026-08-31T00:00:00Z',
+              reset_accuracy: 'derived',
+            },
+          ],
+        })
+      ),
+      { stores: emptyStores(), translateQuotaWindowLabel, t, nowMs: NOW_MS }
+    );
+
+    expect(windows.map((window) => window.key)).toEqual(['burst', 'weekly']);
+    expect(windows[0]).toMatchObject({
+      label: 'Burst window',
+      kind: 'five_hour',
+      source: 'plugin',
+      usedPercent: 60,
+      remainingPercent: 40,
+      observedAtMs: Date.parse('2026-08-26T09:10:00Z'),
+    });
+    expect(windows[1]).toMatchObject({
+      label: 'Weekly allowance',
+      kind: 'weekly',
+      source: 'plugin',
+      usedPercent: 20,
+      remainingPercent: 80,
+      amountLabel: '40 / 200 credits',
+      // The contract's `derived` accuracy has no display equivalent, so it is
+      // presented as an estimate rather than a provider-stated exact time.
+      resetAccuracy: 'estimated',
+    });
+    expect(getQuotaWindowShortLabel(windows[0])).toBe('5H');
+  });
+
+  it('keeps plugin consumption amounts when only remaining or used is available', () => {
+    const windows = buildAccountQuotaDisplayWindows(
+      buildRow(
+        pluginFile(
+          'acme-llm',
+          validContract({
+            windows: [
+              {
+                id: 'used-limit',
+                used: 12,
+                limit: 20,
+                unit: 'requests',
+                reset_at: '2026-09-01T00:00:00Z',
+              },
+              {
+                id: 'remaining-limit',
+                remaining: 8,
+                limit: 20,
+                unit: 'credits',
+                reset_at: '2026-09-01T00:00:00Z',
+              },
+              { id: 'remaining', remaining: 8, unit: 'credits', reset_at: '2026-09-01T00:00:00Z' },
+              { id: 'used', used: 12, unit: 'requests', reset_at: '2026-09-01T00:00:00Z' },
+            ],
+          })
+        )
+      ),
+      { stores: emptyStores(), translateQuotaWindowLabel, t, nowMs: NOW_MS }
+    );
+
+    expect(windows.map((window) => window.amountLabel)).toEqual([
+      '12 / 20 requests',
+      '8 / 20 credits remaining',
+      '8 credits remaining',
+      '12 requests used',
+    ]);
+  });
+});
+
+describe('generic plugin quota failure isolation', () => {
+  const NOW_MS = Date.parse('2026-08-26T09:20:00Z');
+  const options = () => ({
+    stores: emptyStores(),
+    translateQuotaWindowLabel,
+    t,
+    nowMs: NOW_MS,
+  });
+
+  const withContract = (payload: unknown): AuthFileItem => ({
+    name: 'acme-account.json',
+    provider: 'acme-llm',
+    metadata: { status: 'available', plugin_quota: payload },
+  });
+
+  const valid = (overrides: Record<string, unknown> = {}) => ({
+    ...cursorPluginQuotaContract,
+    provider: 'acme-llm',
+    ...overrides,
+  });
+
+  it.each([
+    ['an unsupported contract version', valid({ version: 2 })],
+    ['an unknown schema', valid({ schema: 'evil.schema' })],
+    ['a non-object payload', ['not', 'an', 'object']],
+    ['a null payload', null],
+    ['an unavailable contract', valid({ availability: 'unavailable' })],
+    ['a stale observation', valid({ observed_at: '2026-08-25T09:00:00Z' })],
+    ['a missing observation timestamp', valid({ observed_at: undefined })],
+    ['an invalid observation timestamp', valid({ observed_at: 'not-a-timestamp' })],
+    ['a materially future observation timestamp', valid({ observed_at: '2026-08-26T09:26:00Z' })],
+    ['a missing freshness ttl', valid({ ttl_seconds: undefined })],
+    ['an invalid freshness ttl', valid({ ttl_seconds: 0 })],
+    ['non-array windows', valid({ windows: { id: 'subscription' } })],
+    ['windows without identity', valid({ windows: [{ label: 'Nameless', used_percent: 10 }] })],
+    ['windows with nothing to show', valid({ windows: [{ id: 'empty' }] })],
+    [
+      'windows with unusable numbers',
+      valid({
+        windows: [
+          { id: 'broken', used_percent: 'lots', used: -5, limit: Infinity, reset_at: 'someday' },
+        ],
+      }),
+    ],
+  ])('renders no window for %s', (_name, payload) => {
+    expect(buildAccountQuotaDisplayWindows(buildRow(withContract(payload)), options())).toEqual([]);
+  });
+
+  it('bounds window count, label length, and duplicate identities', () => {
+    const windows = buildAccountQuotaDisplayWindows(
+      buildRow(
+        withContract(
+          valid({
+            windows: [
+              {
+                id: 'dupe',
+                label: 'x'.repeat(500),
+                used_percent: 10,
+                reset_at: '2026-09-01T00:00:00Z',
+              },
+              {
+                id: 'dupe',
+                label: 'second definition',
+                used_percent: 90,
+                reset_at: '2026-09-01T00:00:00Z',
+              },
+              ...Array.from({ length: 60 }, (_unused, index) => ({
+                id: `bulk-${index}`,
+                label: `Bulk ${index}`,
+                used_percent: 1,
+                reset_at: '2026-09-01T00:00:00Z',
+              })),
+            ],
+          })
+        )
+      ),
+      options()
+    );
+
+    expect(windows.length).toBeLessThanOrEqual(32);
+    expect(windows.filter((window) => window.key === 'dupe')).toHaveLength(1);
+    expect(windows[0].label.length).toBeLessThanOrEqual(128);
+    expect(windows[0].usedPercent).toBe(10);
+  });
+
+  it('clamps out-of-range utilization instead of rendering it', () => {
+    const windows = buildAccountQuotaDisplayWindows(
+      buildRow(
+        withContract(
+          valid({
+            windows: [
+              { id: 'over', label: 'Over', used_percent: 1000, reset_at: '2026-09-01T00:00:00Z' },
+              { id: 'under', label: 'Under', used_percent: -50, reset_at: '2026-09-01T00:00:00Z' },
+            ],
+          })
+        )
+      ),
+      options()
+    );
+
+    expect(windows.map((window) => window.usedPercent)).toEqual([100, 0]);
+    expect(windows.map((window) => window.remainingPercent)).toEqual([0, 100]);
+  });
+
+  it('keeps built-in provider windows authoritative over a plugin contract', () => {
+    const file: AuthFileItem = {
+      name: 'codex.json',
+      type: 'codex',
+      authIndex: 'auth-1',
+      metadata: { plugin_quota: valid() },
+    };
+    const stores = emptyStores();
+    const codexQuota: CodexQuotaState = {
+      status: 'success',
+      windows: [{ id: 'weekly', label: 'Weekly', usedPercent: 36, resetLabel: 'codex-reset' }],
+    };
+
+    const windows = buildAccountQuotaDisplayWindows(buildRow(file, stores), {
+      ...options(),
+      stores,
+      getDisplayCodexQuota: () => codexQuota,
+    });
+
+    expect(windows.map((window) => window.source)).toEqual(['codex']);
+    expect(windows[0].key).toBe('weekly');
   });
 });

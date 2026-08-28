@@ -1095,6 +1095,26 @@ const buildAuthFileStatusPayload = (
 };
 
 export const authFilesApi = {
+  refreshQuota: async (
+    target: AuthFileStatusTarget,
+    requestScope?: AuthFilesApiRequestScope
+  ) => {
+    const payload: Record<string, string> = { name: target.name };
+    if (target.authIndex !== undefined && target.authIndex !== null && `${target.authIndex}` !== '') {
+      payload.auth_index = String(target.authIndex);
+    }
+    return requestScope
+      ? apiClient.post<{ status: string; name?: string; metadata?: { plugin_quota?: unknown } }>(
+          '/auth-files/refresh-quota',
+          payload,
+          createScopedApiRequestConfig(requestScope)
+        )
+      : apiClient.post<{ status: string; name?: string; metadata?: { plugin_quota?: unknown } }>(
+          '/auth-files/refresh-quota',
+          payload
+        );
+  },
+
   list: async (requestScope?: AuthFilesApiRequestScope) => {
     const response = requestScope
       ? await apiClient.get<AuthFilesResponse>(
