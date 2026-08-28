@@ -133,7 +133,16 @@ export function AccountQuotaTab({
   );
   const otherQuotaItems = allWindows.filter((window) => !isIntervalQuotaWindow(window));
 
+  const pluginSpend = detailView.quota.pluginSpend;
+  const pluginDaily = detailView.quota.pluginDaily;
+  const usePluginSpend = pluginSpend !== null;
+
   const formatNumber = (value: number) => new Intl.NumberFormat(i18n.language).format(value);
+  const formatCents = (cents: number | null) =>
+    cents === null ? '-' : formatUsd(cents / 100);
+  const formatTokens = (tokens: number | null) =>
+    tokens === null ? '-' : formatCompactNumber(tokens);
+  const peakDailyCents = pluginDaily.reduce((peak, day) => Math.max(peak, day.costCents), 0);
   const formatTime = (value: number | null) =>
     value
       ? new Intl.DateTimeFormat(i18n.language, {
@@ -184,38 +193,107 @@ export function AccountQuotaTab({
             </strong>
           </div>
         </div>
-        <div className={styles.quotaSummaryMetrics} data-account-quota-metrics="true">
-          <MetricCell
-            icon={<IconChartLine size={20} />}
-            tone="blue"
-            label={t('accounts.detail_total_requests')}
-            value={history ? formatCompactNumber(history.totalRequests) : '-'}
-            valueTitle={history ? formatNumber(history.totalRequests) : undefined}
-          />
-          <MetricCell
-            icon={<IconBinary size={20} />}
-            tone="teal"
-            label={t('accounts.detail_total_tokens')}
-            value={history ? formatCompactNumber(history.totalTokens) : '-'}
-            valueTitle={history ? formatNumber(history.totalTokens) : undefined}
-          />
-          <MetricCell
-            icon={<IconDollarSign size={20} />}
-            tone="amber"
-            label={t('accounts.detail_total_cost')}
-            value={history ? formatUsd(history.totalCost) : '-'}
-          />
-          <MetricCell
-            icon={<IconCheck size={20} />}
-            tone="green"
-            label={t('accounts.detail_success_rate')}
-            value={
-              history?.successRate !== null && history?.successRate !== undefined
-                ? `${history.successRate.toFixed(2)}%`
-                : '-'
-            }
-          />
+        <div
+          className={`${styles.quotaSummaryMetrics} ${usePluginSpend ? styles.quotaSummaryMetricsPlugin : ''}`}
+          data-account-quota-metrics="true"
+        >
+          {usePluginSpend ? (
+            <>
+              <MetricCell
+                icon={<IconDollarSign size={20} />}
+                tone="amber"
+                label={t('accounts.detail_cursor_metered', { defaultValue: 'Cursor-metered' })}
+                value={formatCents(pluginSpend.meteredCents)}
+              />
+              <MetricCell
+                icon={<IconDollarSign size={20} />}
+                tone="blue"
+                label={t('accounts.detail_today_cost', { defaultValue: 'Today' })}
+                value={formatCents(pluginSpend.todayCents)}
+              />
+              <MetricCell
+                icon={<IconDollarSign size={20} />}
+                tone="teal"
+                label={t('accounts.detail_period_cost', {
+                  defaultValue: `${pluginSpend.periodDays ?? 30}-day cost`,
+                  days: pluginSpend.periodDays ?? 30,
+                })}
+                value={formatCents(pluginSpend.periodCents)}
+              />
+              <MetricCell
+                icon={<IconBinary size={20} />}
+                tone="green"
+                label={t('accounts.detail_latest_tokens', { defaultValue: 'Latest tokens' })}
+                value={formatTokens(pluginSpend.latestTokens)}
+                valueTitle={
+                  pluginSpend.latestTokens === null
+                    ? undefined
+                    : formatNumber(pluginSpend.latestTokens)
+                }
+              />
+              <MetricCell
+                icon={<IconChartLine size={20} />}
+                tone="blue"
+                label={t('accounts.detail_period_tokens', { defaultValue: '30d tokens' })}
+                value={formatTokens(pluginSpend.periodTokens)}
+                valueTitle={
+                  pluginSpend.periodTokens === null
+                    ? undefined
+                    : formatNumber(pluginSpend.periodTokens)
+                }
+              />
+            </>
+          ) : (
+            <>
+              <MetricCell
+                icon={<IconChartLine size={20} />}
+                tone="blue"
+                label={t('accounts.detail_total_requests')}
+                value={history ? formatCompactNumber(history.totalRequests) : '-'}
+                valueTitle={history ? formatNumber(history.totalRequests) : undefined}
+              />
+              <MetricCell
+                icon={<IconBinary size={20} />}
+                tone="teal"
+                label={t('accounts.detail_total_tokens')}
+                value={history ? formatCompactNumber(history.totalTokens) : '-'}
+                valueTitle={history ? formatNumber(history.totalTokens) : undefined}
+              />
+              <MetricCell
+                icon={<IconDollarSign size={20} />}
+                tone="amber"
+                label={t('accounts.detail_total_cost')}
+                value={history ? formatUsd(history.totalCost) : '-'}
+              />
+              <MetricCell
+                icon={<IconCheck size={20} />}
+                tone="green"
+                label={t('accounts.detail_success_rate')}
+                value={
+                  history?.successRate !== null && history?.successRate !== undefined
+                    ? `${history.successRate.toFixed(2)}%`
+                    : '-'
+                }
+              />
+            </>
+          )}
         </div>
+        {pluginDaily.length > 0 ? (
+          <div className={styles.quotaDailyChart} data-account-quota-daily-chart="true">
+            {pluginDaily.map((day) => {
+              const height =
+                peakDailyCents > 0 ? Math.max(4, Math.round((day.costCents / peakDailyCents) * 100)) : 4;
+              return (
+                <div key={day.date} className={styles.quotaDailyBarWrap} title={`${day.date}: ${formatUsd(day.costCents / 100)}`}>
+                  {day.costCents === peakDailyCents ? (
+                    <span className={styles.quotaDailyBarLabel}>{formatUsd(day.costCents / 100)}</span>
+                  ) : null}
+                  <div className={styles.quotaDailyBar} style={{ height: `${height}%` }} />
+                </div>
+              );
+            })}
+          </div>
+        ) : null}
       </section>
 
       {windowUsageError ? <div className={styles.errorBox}>{windowUsageError}</div> : null}

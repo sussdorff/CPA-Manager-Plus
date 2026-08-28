@@ -1727,6 +1727,36 @@ describe('useAuthFilesData batchDelete', () => {
   });
 });
 
+describe('useAuthFilesData plugin quota list refresh', () => {
+  it('keeps existing files when an empty list is ignored', async () => {
+    const existing = [
+      {
+        id: 'runtime-cursor',
+        name: 'cursor-1.json',
+        type: 'cursor-acp',
+        metadata: { plugin_quota: { schema: 'cliproxy.plugin.quota' } },
+      },
+    ] as AuthFileItem[];
+    mocks.list.mockResolvedValueOnce({ files: existing }).mockResolvedValueOnce({ files: [] });
+    const hook = mountUseAuthFilesData();
+    await act(async () => hook.getCurrent().loadFiles());
+    expect(hook.getCurrent().files).toEqual(existing);
+
+    await act(async () => hook.getCurrent().loadFiles({ ignoreEmpty: true }));
+    expect(hook.getCurrent().files).toEqual(existing);
+
+    act(() => {
+      hook.getCurrent().patchAuthFileMetadata('cursor-1.json', {
+        plugin_quota: { schema: 'cliproxy.plugin.quota', observed_at: '2026-08-28T08:04:03Z' },
+      });
+    });
+    expect(hook.getCurrent().files[0]?.metadata).toEqual({
+      plugin_quota: { schema: 'cliproxy.plugin.quota', observed_at: '2026-08-28T08:04:03Z' },
+    });
+    hook.unmount();
+  });
+});
+
 describe('useAuthFilesData status targeting', () => {
   it('does not let an old connection load overwrite the new connection files', async () => {
     const oldFiles = [

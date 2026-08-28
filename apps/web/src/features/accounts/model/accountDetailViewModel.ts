@@ -15,6 +15,11 @@ import { normalizePlanType, parseIdTokenPayload } from '@/utils/quota/parsers';
 import { isValidQuotaResetAtMs } from '@/utils/quota/formatters';
 import { resolveCodexPlanType } from '@/utils/quota/resolvers';
 import { isCodexMainQuotaWindow } from '@/utils/quota/codexQuota';
+import {
+  parsePluginQuotaContract,
+  type PluginQuotaDaily,
+  type PluginQuotaSpend,
+} from '@/utils/quota/pluginQuota';
 import { parseTimestampMs } from '@/utils/timestamp';
 import { sumRecentRequests, type RecentRequestBucket } from '@/utils/recentRequests';
 import type { AccountRow } from './accountRows';
@@ -319,6 +324,8 @@ export interface AccountDetailViewModel {
     cooldown: QuotaCooldownInfo | null;
     resetCreditsAvailableCount: number | null;
     resetCreditExpiries: AccountDetailResetCreditExpiry[];
+    pluginSpend: PluginQuotaSpend | null;
+    pluginDaily: PluginQuotaDaily[];
   };
   auth: {
     fields: AccountDetailField[];
@@ -1511,6 +1518,7 @@ export const buildAccountDetailViewModel = (
     computedRecommendation ??
     (providedRecommendationIsEvidenceSensitive ? null : providedRecommendation);
   const quotaCooldown = options.quotaCooldown ?? null;
+  const pluginContract = parsePluginQuotaContract(row.raw);
   const quotaWindows: AccountDetailQuotaWindowInput[] = (options.quotaWindows ?? []).map(
     (window) => {
       const resetAtMs = isValidQuotaResetAtMs(window.resetAtMs) ? window.resetAtMs : null;
@@ -1616,6 +1624,8 @@ export const buildAccountDetailViewModel = (
       resetCreditExpiries: getSortedCodexResetCreditExpiries(
         options.codexQuota?.rateLimitResetCredits
       ).map((item) => ({ id: item.id, expiresAtMs: item.expiresAtMs })),
+      pluginSpend: pluginContract?.spend ?? null,
+      pluginDaily: pluginContract?.daily ?? [],
     },
     auth: {
       fields: buildAuthFields(row),

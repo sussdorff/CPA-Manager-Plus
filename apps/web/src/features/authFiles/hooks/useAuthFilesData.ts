@@ -91,7 +91,11 @@ export type UseAuthFilesDataResult = {
   batchStatusUpdating: boolean;
   batchFieldsUpdating: boolean;
   fileInputRef: RefObject<HTMLInputElement | null>;
-  loadFiles: (options?: { throwOnError?: boolean }) => Promise<AuthFileItem[] | undefined>;
+  loadFiles: (options?: {
+    throwOnError?: boolean;
+    ignoreEmpty?: boolean;
+  }) => Promise<AuthFileItem[] | undefined>;
+  patchAuthFileMetadata: (fileName: string, metadata: Record<string, unknown>) => void;
   handleUploadClick: () => void;
   handleFileChange: (event: ChangeEvent<HTMLInputElement>) => Promise<void>;
   savePastedAuthJson: (
@@ -922,8 +926,28 @@ export function useAuthFilesData(options: UseAuthFilesDataOptions = {}): UseAuth
     });
   }, [files, selectedFiles.size]);
 
+  const patchAuthFileMetadata = useCallback(
+    (fileName: string, metadata: Record<string, unknown>) => {
+      if (!fileName) return;
+      commitFiles((current) =>
+        current.map((file) => {
+          if (file.name !== fileName && file.id !== fileName) return file;
+          const existing =
+            file.metadata && typeof file.metadata === 'object' && !Array.isArray(file.metadata)
+              ? (file.metadata as Record<string, unknown>)
+              : {};
+          return { ...file, metadata: { ...existing, ...metadata } };
+        })
+      );
+    },
+    [commitFiles]
+  );
+
   const loadFiles = useCallback(
-    async (options?: { throwOnError?: boolean }): Promise<AuthFileItem[] | undefined> => {
+    async (options?: {
+      throwOnError?: boolean;
+      ignoreEmpty?: boolean;
+    }): Promise<AuthFileItem[] | undefined> => {
       const requestConnectionFingerprint = connectionFingerprint;
       const generation = authFilesOperationGenerationRef.current;
       const requestID = ++loadFilesRequestRef.current;
@@ -942,6 +966,9 @@ export function useAuthFilesData(options: UseAuthFilesDataOptions = {}): UseAuth
           return;
         }
         const nextFiles = Array.isArray(data?.files) ? data.files : [];
+        if (options?.ignoreEmpty && nextFiles.length === 0) {
+          return nextFiles;
+        }
         commitFiles(nextFiles);
         return nextFiles;
       } catch (err: unknown) {
@@ -2020,6 +2047,7 @@ export function useAuthFilesData(options: UseAuthFilesDataOptions = {}): UseAuth
     batchFieldsUpdating,
     fileInputRef,
     loadFiles,
+    patchAuthFileMetadata,
     handleUploadClick,
     handleFileChange,
     savePastedAuthJson,

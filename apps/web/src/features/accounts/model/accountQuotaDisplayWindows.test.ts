@@ -772,7 +772,7 @@ describe('generic plugin quota failure isolation', () => {
     ['a non-object payload', ['not', 'an', 'object']],
     ['a null payload', null],
     ['an unavailable contract', valid({ availability: 'unavailable' })],
-    ['a stale observation', valid({ observed_at: '2026-08-26T07:00:00Z' })],
+    ['a stale observation', valid({ observed_at: '2026-08-25T09:00:00Z' })],
     ['a missing observation timestamp', valid({ observed_at: undefined })],
     ['an invalid observation timestamp', valid({ observed_at: 'not-a-timestamp' })],
     ['a materially future observation timestamp', valid({ observed_at: '2026-08-26T09:26:00Z' })],

@@ -698,6 +698,10 @@ const buildPluginQuotaDisplayWindows = (
       amountLabel: formatPluginAmountLabel(window),
       cycleStartMs: window.windowStartMs,
       cycleEndMs: window.windowEndMs ?? window.resetAtMs,
+      windowMode:
+        window.windowStartMs !== null && (window.windowEndMs !== null || window.resetAtMs !== null)
+          ? 'fixed'
+          : undefined,
       // A plugin window describes the credential as a whole unless and until
       // the contract gains an explicit model scope.
       modelScope: { kind: 'all', complete: true },

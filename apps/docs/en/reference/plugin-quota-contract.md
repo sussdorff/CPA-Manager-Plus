@@ -92,6 +92,10 @@ publishes no `plugin_quota` key behaves exactly as it does today.
 }
 ```
 
+A Cursor plugin observation can fill `windows` with more than one entry. The
+consumer still treats them as generic rows: Total, Cursor, Third Party, and
+Grok Bot are just labels and kinds, not a provider branch.
+
 ### Envelope
 
 | Field          | Required | Rule                                                                                 |
@@ -103,6 +107,8 @@ publishes no `plugin_quota` key behaves exactly as it does today.
 | `observed_at`  | no       | RFC3339 UTC. When the provider took the observation.                                 |
 | `ttl_seconds`  | no       | Positive integer, capped at 7 days. How long the observation stays displayable.      |
 | `windows`      | yes      | Array, at most 32 entries. Must be empty whenever `availability` is not `available`. |
+| `spend`        | no       | Optional cost summary. Money fields are USD cents. Unknown keys are ignored.         |
+| `daily`        | no       | Optional UTC day rows (`date`, `cost_cents`, `tokens`) for a cost histogram.         |
 
 ### Window
 

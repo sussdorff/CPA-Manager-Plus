@@ -265,6 +265,7 @@ import {
 } from '@/features/accounts/components';
 import {
   accountQuotaSnapshotApi,
+  authFilesApi,
   consumeCodexRateLimitResetCredit,
   monitoringAnalyticsApi,
   usageServiceApi,
@@ -983,6 +984,7 @@ export function AccountsPage() {
     batchFieldsUpdating,
     fileInputRef,
     loadFiles,
+    patchAuthFileMetadata,
     handleUploadClick,
     handleFileChange,
     savePastedAuthJson,
@@ -5470,12 +5472,44 @@ export function AccountsPage() {
               setXaiQuota
             )
           );
-        default:
-          return false;
+        default: {
+          const name = row.raw.name || row.fileName;
+          if (!name) return false;
+          try {
+            const refreshed = await authFilesApi.refreshQuota(
+              { name, authIndex: row.authIndex },
+              authFilesRequestScope
+            );
+            const pluginQuota = refreshed.metadata?.plugin_quota;
+            if (pluginQuota) {
+              patchAuthFileMetadata(name, { plugin_quota: pluginQuota });
+            }
+            const matchesRefreshedFile = (file: { name?: string; id?: string }) =>
+              file.name === name || file.id === name || file.id === row.raw.id;
+            const wait = (ms: number) =>
+              new Promise<void>((resolve) => {
+                window.setTimeout(resolve, ms);
+              });
+            for (let attempt = 0; attempt < 16; attempt += 1) {
+              const listed = await authFilesApi.list(authFilesRequestScope);
+              const listedFiles = Array.isArray(listed?.files) ? listed.files : [];
+              if (listedFiles.some(matchesRefreshedFile)) {
+                await loadFiles({ ignoreEmpty: true });
+                return true;
+              }
+              await wait(400);
+            }
+            return Boolean(pluginQuota);
+          } catch {
+            return false;
+          }
+        }
       }
     },
     [
       invalidateCodexCredentialStatusForSelectionKeys,
+      loadFiles,
+      patchAuthFileMetadata,
       setAntigravityQuota,
       setClaudeQuota,
       setCodexQuota,

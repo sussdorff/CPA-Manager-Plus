@@ -343,6 +343,7 @@ const { mocks } = vi.hoisted(() => {
       loadFiles: vi.fn<
         (options?: { throwOnError?: boolean }) => Promise<AuthFileItem[] | undefined>
       >(async () => undefined),
+      patchAuthFileMetadata: vi.fn(),
       lastAuthFilesDataOptions: null as null | {
         connectionFingerprint?: string | null;
         onCredentialMutation?: (mutation: AuthFilesCredentialMutation) => void;
@@ -542,6 +543,7 @@ vi.mock('@/features/authFiles/hooks/useAuthFilesData', () => ({
       batchFieldsUpdating: mocks.batchFieldsUpdating,
       fileInputRef: { current: null },
       loadFiles: mocks.loadFiles,
+      patchAuthFileMetadata: mocks.patchAuthFileMetadata,
       handleUploadClick: vi.fn(),
       handleFileChange: vi.fn(),
       savePastedAuthJson: vi.fn(async () => 'saved.json'),

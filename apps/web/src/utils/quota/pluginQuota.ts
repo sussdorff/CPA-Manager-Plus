@@ -46,6 +46,22 @@ export type PluginQuotaWindowKind = (typeof PLUGIN_QUOTA_WINDOW_KINDS)[number];
 
 export type PluginQuotaAvailability = 'available' | 'unavailable';
 
+export interface PluginQuotaSpend {
+  currency: string;
+  meteredCents: number | null;
+  todayCents: number | null;
+  periodCents: number | null;
+  latestTokens: number | null;
+  periodTokens: number | null;
+  periodDays: number | null;
+}
+
+export interface PluginQuotaDaily {
+  date: string;
+  costCents: number;
+  tokens: number | null;
+}
+
 export interface PluginQuotaWindow {
   id: string;
   label: string;
@@ -73,6 +89,8 @@ export interface PluginQuotaContract {
   stale: boolean;
   /** Empty whenever the contract is unavailable or stale. */
   windows: PluginQuotaWindow[];
+  spend: PluginQuotaSpend | null;
+  daily: PluginQuotaDaily[];
 }
 
 const asRecord = (value: unknown): Record<string, unknown> | null =>
@@ -185,6 +203,46 @@ const parseWindow = (value: unknown): PluginQuotaWindow | null => {
   };
 };
 
+const DATE_DAY = /^\d{4}-\d{2}-\d{2}$/;
+
+const parseSpend = (value: unknown): PluginQuotaSpend | null => {
+  const record = asRecord(value);
+  if (!record) return null;
+  const spend: PluginQuotaSpend = {
+    currency: readBoundedText(record.currency) || 'USD',
+    meteredCents: readCount(record.metered_cents),
+    todayCents: readCount(record.today_cents),
+    periodCents: readCount(record.period_cents),
+    latestTokens: readCount(record.latest_tokens),
+    periodTokens: readCount(record.period_tokens),
+    periodDays: readCount(record.period_days),
+  };
+  if (
+    spend.meteredCents === null &&
+    spend.todayCents === null &&
+    spend.periodCents === null &&
+    spend.latestTokens === null &&
+    spend.periodTokens === null
+  ) {
+    return null;
+  }
+  return spend;
+};
+
+const parseDaily = (value: unknown): PluginQuotaDaily[] => {
+  if (!Array.isArray(value)) return [];
+  const days: PluginQuotaDaily[] = [];
+  for (const entry of value.slice(0, MAX_WINDOWS)) {
+    const record = asRecord(entry);
+    if (!record) continue;
+    const date = readBoundedText(record.date);
+    const costCents = readCount(record.cost_cents);
+    if (!DATE_DAY.test(date) || costCents === null) continue;
+    days.push({ date, costCents, tokens: readCount(record.tokens) });
+  }
+  return days;
+};
+
 const parseWindows = (value: unknown): PluginQuotaWindow[] => {
   if (!Array.isArray(value)) return [];
   const seen = new Set<string>();
@@ -243,5 +301,7 @@ export const parsePluginQuotaContract = (
     ttlSeconds,
     stale,
     windows: available ? parseWindows(payload.windows) : [],
+    spend: available ? parseSpend(payload.spend) : null,
+    daily: available ? parseDaily(payload.daily) : [],
   };
 };

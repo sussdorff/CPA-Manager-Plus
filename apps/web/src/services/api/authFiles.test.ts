@@ -4,6 +4,7 @@ const { mocks } = vi.hoisted(() => ({
   mocks: {
     get: vi.fn(),
     getRaw: vi.fn(),
+    post: vi.fn(),
     postForm: vi.fn(),
     patch: vi.fn(),
     put: vi.fn(),
@@ -15,6 +16,7 @@ vi.mock('./client', () => ({
   apiClient: {
     get: mocks.get,
     getRaw: mocks.getRaw,
+    post: mocks.post,
     postForm: mocks.postForm,
     patch: mocks.patch,
     put: mocks.put,
@@ -40,6 +42,7 @@ import cursorPluginQuotaContract from '@/utils/quota/pluginQuotaCursorV1.json';
 beforeEach(() => {
   mocks.get.mockReset();
   mocks.getRaw.mockReset();
+  mocks.post.mockReset();
   mocks.postForm.mockReset();
   mocks.patch.mockReset();
   mocks.put.mockReset();
@@ -201,6 +204,30 @@ describe('authFilesApi model endpoints', () => {
       headers: { Authorization: 'Bearer old-cpa-key' },
       cpampScopedRequest: true,
     });
+  });
+});
+
+describe('authFilesApi plugin quota refresh', () => {
+  it('posts the credential name to the plugin quota refresh endpoint', async () => {
+    mocks.post.mockResolvedValue({ status: 'ok', name: 'cursor-1.json' });
+    const requestScope = {
+      apiBase: 'http://old-cpa.local:8317',
+      managementKey: 'old-cpa-key',
+    };
+
+    await expect(
+      authFilesApi.refreshQuota({ name: 'cursor-1.json', authIndex: '0' }, requestScope)
+    ).resolves.toEqual({ status: 'ok', name: 'cursor-1.json' });
+
+    expect(mocks.post).toHaveBeenCalledWith(
+      '/auth-files/refresh-quota',
+      { name: 'cursor-1.json', auth_index: '0' },
+      {
+        baseURL: 'http://old-cpa.local:8317/v0/management',
+        headers: { Authorization: 'Bearer old-cpa-key' },
+        cpampScopedRequest: true,
+      }
+    );
   });
 });
 
@@ -1645,7 +1672,7 @@ describe('generic plugin quota contract carried by auth metadata', () => {
       availability: 'available',
       stale: false,
       observedAtMs: Date.parse('2026-08-26T09:15:00Z'),
-      ttlSeconds: 900,
+      ttlSeconds: 21600,
     });
     expect(contract?.windows).toEqual([
       {
@@ -1694,7 +1721,7 @@ describe('generic plugin quota contract carried by auth metadata', () => {
       metadata: { plugin_quota: cursorPluginQuotaContract },
     };
 
-    const contract = parsePluginQuotaContract(file, NOW_MS + 3_600_000);
+    const contract = parsePluginQuotaContract(file, NOW_MS + 22_000_000);
 
     expect(contract).toMatchObject({ availability: 'unavailable', stale: true, windows: [] });
   });

@@ -165,7 +165,7 @@ describe('generic plugin quota in the account summary', () => {
     ['malformed payload', 'not-an-object'],
     ['malformed windows', contract({ windows: 'not-an-array' })],
     ['window without identity or values', contract({ windows: [{ label: 'Nameless' }] })],
-    ['stale observation', contract({ observed_at: '2026-08-26T07:00:00Z', ttl_seconds: 900 })],
+    ['stale observation', contract({ observed_at: '2026-08-25T09:00:00Z', ttl_seconds: 900 })],
     ['missing observation timestamp', contract({ observed_at: undefined })],
     ['invalid observation timestamp', contract({ observed_at: 'not-a-timestamp' })],
     ['materially future observation timestamp', contract({ observed_at: '2026-08-26T09:26:00Z' })],
