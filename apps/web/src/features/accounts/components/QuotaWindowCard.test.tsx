@@ -89,11 +89,14 @@ const makeWindow = (overrides: Partial<AccountDetailQuotaWindow> = {}): AccountD
 
 const renderCard = (
   window: AccountDetailQuotaWindow,
-  mode?: 'standard' | 'model' | 'other'
+  mode?: 'standard' | 'model' | 'other',
+  variant?: 'drawer' | 'compact'
 ): ReactTestRenderer => {
   let renderer!: ReactTestRenderer;
   act(() => {
-    renderer = create(<QuotaWindowCard window={window} mode={mode} locale="en-US" />);
+    renderer = create(
+      <QuotaWindowCard window={window} mode={mode} variant={variant} locale="en-US" />
+    );
   });
   return renderer;
 };
@@ -124,6 +127,20 @@ describe('QuotaWindowCard', () => {
     expect(previousText).toContain('accounts.detail_success_rate');
     expect(previousText).toContain('$100.00');
     expect(previousText).not.toContain('accounts.detail_used');
+  });
+
+  it('renders the compact remaining bar without comparison columns', () => {
+    const renderer = renderCard(makeWindow(), 'standard', 'compact');
+    const text = readText(renderer.root);
+    expect(renderer.root.findByProps({ 'data-quota-card-variant': 'compact' })).toBeTruthy();
+    expect(renderer.root.findAllByProps({ 'data-quota-standard-comparison': 'true' })).toHaveLength(
+      0
+    );
+    expect(renderer.root.findAllByProps({ 'data-quota-usage-forecast': 'true' })).toHaveLength(0);
+    expect(text).toContain('5H');
+    expect(text).toContain('40%');
+    expect(text).not.toContain('accounts.detail_previous_usage');
+    expect(text).not.toContain('accounts.detail_current_forecast');
   });
 
   it('treats the Codex main family scope as an account-wide standard quota', () => {

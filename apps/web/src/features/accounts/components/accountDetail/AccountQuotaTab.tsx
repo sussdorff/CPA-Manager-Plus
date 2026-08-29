@@ -178,6 +178,30 @@ export function AccountQuotaTab({
     detailView.quota.resetCreditExpiries.length > 0;
   const shouldShowResetRecords = detailView.identity.provider === 'codex' && hasResetRecords;
 
+  const renderWindowCards = (
+    windows: AccountDetailQuotaWindow[],
+    mode: 'standard' | 'model' | 'other'
+  ) => (
+    <div className={styles.quotaBarList} data-quota-bar-list={mode}>
+      {windows.map((window) => (
+        <QuotaWindowCard
+          key={window.key}
+          window={window}
+          mode={mode}
+          variant="compact"
+          locale={i18n.language}
+        />
+      ))}
+    </div>
+  );
+  const dailyDetailsLabel = (day: { date: string; costMinorUnits: number; tokens: number | null }) => {
+    const cost = formatPluginCost(day.costMinorUnits);
+    if (day.tokens === null) {
+      return `${day.date}: ${cost}`;
+    }
+    return `${day.date}: ${cost} · ${formatNumber(day.tokens)} ${t('accounts.detail_usage_tokens')}`;
+  };
+
   return (
     <div className={styles.quotaTab} data-account-quota-tab="true">
       <div className={styles.quotaTabHeader}>
@@ -199,6 +223,83 @@ export function AccountQuotaTab({
           </Button>
         </div>
       </div>
+
+      {windowUsageError ? <div className={styles.errorBox}>{windowUsageError}</div> : null}
+
+      {standardWindows.length > 0 || allWindows.length === 0 ? (
+        <section className={styles.quotaSection} data-quota-window-group="standard">
+          {standardWindows.length > 0 ? (
+            renderWindowCards(standardWindows, 'standard')
+          ) : (
+            <p className={styles.quotaEmpty}>{t('accounts.detail_no_quota_windows')}</p>
+          )}
+        </section>
+      ) : null}
+
+      {modelWindows.length > 0 ? (
+        <section className={styles.quotaSection} data-quota-window-group="model">
+          {renderWindowCards(modelWindows, 'model')}
+        </section>
+      ) : null}
+
+      {otherQuotaItems.length > 0 ? (
+        <section className={styles.quotaSection} data-quota-window-group="other">
+          {renderWindowCards(otherQuotaItems, 'other')}
+        </section>
+      ) : null}
+
+      {plugin &&
+      (showPluginState ||
+        plugin.daily.length > 0 ||
+        plugin.topModel ||
+        plugin.provenance.length > 0) ? (
+        <section className={styles.quotaSection} data-account-plugin-quota="true">
+          {showPluginState ? (
+            <p className={styles.quotaEmpty} data-account-plugin-quota-state="true">
+              {pluginStateLabel}
+            </p>
+          ) : null}
+          {plugin.daily.length > 0 ? (
+            <ul className={styles.pluginQuotaHistogram} data-account-quota-daily-chart="true">
+              {plugin.daily.map((day) => {
+                const height =
+                  maxDailyCost > 0 ? Math.max(4, (day.costMinorUnits / maxDailyCost) * 100) : 4;
+                const details = dailyDetailsLabel(day);
+                return (
+                  <li
+                    key={day.date}
+                    className={styles.pluginQuotaDailyItem}
+                    data-account-quota-daily-bar="true"
+                    title={details}
+                  >
+                    <span className={styles.pluginQuotaBarTrack} aria-hidden="true">
+                      <span className={styles.pluginQuotaBar} style={{ height: `${height}%` }} />
+                    </span>
+                    <span className={styles.pluginQuotaBarLabel}>{details}</span>
+                  </li>
+                );
+              })}
+            </ul>
+          ) : null}
+
+          {plugin.topModel || plugin.provenance.length > 0 ? (
+            <div className={styles.quotaSummaryMeta}>
+              {plugin.topModel ? (
+                <span>
+                  {t('accounts.detail_plugin_top_model', { defaultValue: 'Top model' })}:{' '}
+                  <strong>{plugin.topModel}</strong>
+                </span>
+              ) : null}
+              {plugin.provenance.length > 0 ? (
+                <span data-account-plugin-quota-provenance="true">
+                  {t('accounts.detail_plugin_provenance', { defaultValue: 'Sources' })}:{' '}
+                  <strong>{plugin.provenance.join(', ')}</strong>
+                </span>
+              ) : null}
+            </div>
+          ) : null}
+        </section>
+      ) : null}
 
       <section className={styles.quotaSummaryPanel} data-account-quota-usage-summary="true">
         <div className={styles.quotaSummaryHeading}>
@@ -257,151 +358,6 @@ export function AccountQuotaTab({
           )}
         </div>
       </section>
-
-      {plugin &&
-      (showPluginState ||
-        plugin.daily.length > 0 ||
-        plugin.topModel ||
-        plugin.provenance.length > 0) ? (
-        <section className={styles.quotaSection} data-account-plugin-quota="true">
-          <div className={styles.quotaSectionHeading}>
-            <h3>{t('accounts.detail_plugin_quota_title', { defaultValue: 'Plugin quota' })}</h3>
-            <span>
-              {t('accounts.detail_plugin_quota_desc', {
-                defaultValue: 'Provider-reported spend and token usage',
-              })}
-            </span>
-          </div>
-          {showPluginState ? (
-            <p className={styles.quotaEmpty} data-account-plugin-quota-state="true">
-              {pluginStateLabel}
-            </p>
-          ) : null}
-          {plugin.daily.length > 0 ? (
-            <div className={styles.pluginQuotaDaily}>
-              <h4>
-                {t('accounts.detail_plugin_daily_usage', { defaultValue: 'Daily plugin usage' })}
-              </h4>
-              <ul className={styles.pluginQuotaHistogram} data-account-quota-daily-chart="true">
-                {plugin.daily.map((day) => {
-                  const height =
-                    maxDailyCost > 0 ? Math.max(4, (day.costMinorUnits / maxDailyCost) * 100) : 4;
-                  return (
-                    <li
-                      key={day.date}
-                      className={styles.pluginQuotaDailyItem}
-                      data-account-quota-daily-bar="true"
-                    >
-                      <span className={styles.pluginQuotaBarTrack} aria-hidden="true">
-                        <span className={styles.pluginQuotaBar} style={{ height: `${height}%` }} />
-                      </span>
-                      <strong>{day.date}</strong>
-                      <span>{formatPluginCost(day.costMinorUnits)}</span>
-                      {day.tokens !== null ? (
-                        <span>
-                          {formatNumber(day.tokens)} {t('accounts.detail_usage_tokens')}
-                        </span>
-                      ) : null}
-                    </li>
-                  );
-                })}
-              </ul>
-            </div>
-          ) : null}
-
-          {plugin.topModel || plugin.provenance.length > 0 ? (
-            <div className={styles.quotaSummaryMeta}>
-              {plugin.topModel ? (
-                <span>
-                  {t('accounts.detail_plugin_top_model', { defaultValue: 'Top model' })}:{' '}
-                  <strong>{plugin.topModel}</strong>
-                </span>
-              ) : null}
-              {plugin.provenance.length > 0 ? (
-                <span data-account-plugin-quota-provenance="true">
-                  {t('accounts.detail_plugin_provenance', { defaultValue: 'Sources' })}:{' '}
-                  <strong>{plugin.provenance.join(', ')}</strong>
-                </span>
-              ) : null}
-            </div>
-          ) : null}
-        </section>
-      ) : null}
-
-      {windowUsageError ? <div className={styles.errorBox}>{windowUsageError}</div> : null}
-
-      {standardWindows.length > 0 || allWindows.length === 0 ? (
-        <section className={styles.quotaSection} data-quota-window-group="standard">
-          <div className={styles.quotaSectionHeading}>
-            <h3>{t('accounts.detail_quota_standard_title', { defaultValue: '标准额度' })}</h3>
-            <span>
-              {t('accounts.detail_quota_standard_desc', {
-                defaultValue: '按时间窗口统计并滚动更新',
-              })}
-            </span>
-          </div>
-          {standardWindows.length > 0 ? (
-            <div className={styles.quotaCardList}>
-              {standardWindows.map((window) => (
-                <QuotaWindowCard
-                  key={window.key}
-                  window={window}
-                  mode="standard"
-                  locale={i18n.language}
-                />
-              ))}
-            </div>
-          ) : (
-            <p className={styles.quotaEmpty}>{t('accounts.detail_no_quota_windows')}</p>
-          )}
-        </section>
-      ) : null}
-
-      {modelWindows.length > 0 ? (
-        <section className={styles.quotaSection} data-quota-window-group="model">
-          <div className={styles.quotaSectionHeading}>
-            <h3>{t('accounts.detail_quota_model_title', { defaultValue: '模型额度' })}</h3>
-            <span>
-              {t('accounts.detail_quota_model_desc', {
-                defaultValue: '按模型及窗口统计的配额信息',
-              })}
-            </span>
-          </div>
-          <div className={styles.quotaCardList}>
-            {modelWindows.map((window) => (
-              <QuotaWindowCard
-                key={window.key}
-                window={window}
-                mode="model"
-                locale={i18n.language}
-              />
-            ))}
-          </div>
-        </section>
-      ) : null}
-
-      {otherQuotaItems.length > 0 ? (
-        <section className={styles.quotaSection} data-quota-window-group="other">
-          <div className={styles.quotaSectionHeading}>
-            <h3>{t('accounts.detail_quota_other_items', { defaultValue: '其他额度项' })}</h3>
-            <span>
-              {t('accounts.detail_quota_other_items_desc', {
-                defaultValue: '金额、产品或缺少完整窗口边界的额度不生成区间统计。',
-              })}
-            </span>
-          </div>
-          <div className={styles.quotaCardList}>
-            {otherQuotaItems.map((window) => (
-              <QuotaWindowCard
-                key={window.key}
-                window={window}
-                mode="other"
-                locale={i18n.language}
-              />
-            ))}
-          </div>
-        </section>
-      ) : null}
 
       {shouldShowResetRecords ? (
         <section

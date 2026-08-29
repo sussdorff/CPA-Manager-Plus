@@ -412,11 +412,17 @@
 
 .compactCard {
   display: grid;
-  grid-template-columns: 56px minmax(0, 1fr) 48px 56px;
-  align-items: center;
-  gap: $spacing-sm;
+  gap: 4px;
   min-width: 0;
   font-size: 12px;
+}
+
+.compactHeader {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  align-items: baseline;
+  gap: $spacing-sm;
+  min-width: 0;
 }
 
 .compactLabel,
@@ -440,12 +446,18 @@
   color: var(--color-text, var(--gray-900));
   text-align: right;
   font-variant-numeric: tabular-nums;
+  white-space: nowrap;
 }
 
 .compactReset {
   color: var(--color-text-secondary, var(--gray-600));
   font-size: 11px;
   text-align: right;
+}
+
+.compactHint {
+  color: var(--color-text-secondary, var(--gray-600));
+  font-size: 11px;
 }
 
 @include mobile {
@@ -517,7 +529,13 @@
     gap: 4px;
   }
 
-  .compactCard {
-    grid-template-columns: 48px minmax(0, 1fr) 42px 52px;
+  .compactHeader {
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 4px 8px;
+  }
+
+  .compactReset {
+    grid-column: 1 / -1;
+    text-align: left;
   }
 }

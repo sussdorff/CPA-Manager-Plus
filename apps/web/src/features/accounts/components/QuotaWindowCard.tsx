@@ -447,12 +447,27 @@ export const QuotaWindowCard = ({
     (hasScopeWarning && !modelWindowStatsUnavailable);
 
   if (variant === 'compact') {
+    const remainingLabel = t('accounts.detail_quota_remaining_label', { defaultValue: 'remaining' });
     return (
-      <div className={styles.compactCard} title={compactTitle || q.label}>
-        <span className={styles.compactLabel}>{q.label}</span>
+      <div
+        className={styles.compactCard}
+        title={compactTitle || q.label}
+        data-quota-card-variant="compact"
+        data-quota-window-mode={q.windowMode ?? 'unknown'}
+      >
+        <div className={styles.compactHeader}>
+          <span className={styles.compactLabel}>{q.label}</span>
+          <span className={styles.compactValue}>
+            {formatPercent(q.remainingPercent)} {remainingLabel}
+          </span>
+          <span className={styles.compactReset}>
+            {resetDisplay !== '-' ? resetDisplay : (q.amountLabel ?? boundaryDisplay)}
+          </span>
+        </div>
         <QuotaProgress className={styles.compactBar} percent={q.remainingPercent} />
-        <span className={styles.compactValue}>{formatPercent(q.remainingPercent)}</span>
-        <span className={styles.compactReset}>{q.amountLabel ?? boundaryDisplay}</span>
+        {q.amountLabel || q.description ? (
+          <span className={styles.compactHint}>{q.amountLabel ?? q.description}</span>
+        ) : null}
       </div>
     );
   }

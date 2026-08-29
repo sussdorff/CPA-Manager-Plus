@@ -17,7 +17,51 @@ vi.mock('react-i18next', async (importOriginal) => {
 const detailView = {
   identity: { provider: 'example-plugin' },
   quota: {
-    windows: [],
+    windows: [
+      {
+        key: 'subscription',
+        label: 'Total',
+        remainingPercent: 85,
+        usedPercent: 15,
+        windowMode: 'fixed',
+        resetLabel: 'in 20d',
+        resetAtMs: Date.parse('2026-09-19T19:00:00Z'),
+        currentUsage: {
+          fromMs: 1,
+          toMs: 2,
+          matched: true,
+          totalRequests: 10,
+          successCalls: 10,
+          failureCalls: 0,
+          totalTokens: 100,
+          totalCost: 1,
+          successRate: 100,
+          lastSeenMs: 2,
+          syncStatus: 'ready',
+          scopeMatchStatus: 'complete',
+          unmatchedRequests: 0,
+        },
+        previousUsage: {
+          fromMs: 0,
+          toMs: 1,
+          matched: true,
+          totalRequests: 8,
+          successCalls: 8,
+          failureCalls: 0,
+          totalTokens: 80,
+          totalCost: 0.8,
+          successRate: 100,
+          lastSeenMs: 1,
+          syncStatus: 'ready',
+          scopeMatchStatus: 'complete',
+          unmatchedRequests: 0,
+        },
+        forecast: { requests: 12, tokens: 120, cost: 1.2, basis: 'quota' },
+        observationSource: 'api_query',
+        observedAtMs: Date.parse('2026-08-28T11:55:00Z'),
+        boundaryAccuracy: 'exact',
+      },
+    ],
     cooldown: null,
     resetCreditsAvailableCount: null,
     resetCreditExpiries: [],
@@ -80,6 +124,11 @@ const text = (value: unknown): string =>
         ? text((value as { children?: unknown }).children)
         : '';
 
+const markerOrder = (value: unknown, markers: string[]): number[] => {
+  const serialized = JSON.stringify(value);
+  return markers.map((marker) => serialized.indexOf(marker));
+};
+
 describe('AccountQuotaTab plugin quota details', () => {
   it('adds generic plugin usage without replacing native usage metrics', async () => {
     const renderer = await render();
@@ -105,19 +154,41 @@ describe('AccountQuotaTab plugin quota details', () => {
     ).toHaveLength(1);
   });
 
-  it('renders the daily histogram as visible semantic list content', async () => {
+  it('renders compact remaining bars before the daily histogram and totals', async () => {
+    const renderer = await render();
+    const [bars, chart, totals] = markerOrder(renderer.toJSON(), [
+      'data-quota-bar-list',
+      'data-account-quota-daily-chart',
+      'data-account-quota-usage-summary',
+    ]);
+
+    expect(renderer.root.findAllByProps({ 'data-quota-card-variant': 'compact' })).toHaveLength(1);
+    expect(renderer.root.findAllByProps({ 'data-quota-standard-comparison': 'true' })).toHaveLength(
+      0
+    );
+    expect(renderer.root.findAllByProps({ 'data-quota-usage-forecast': 'true' })).toHaveLength(0);
+    expect(renderer.root.findAllByProps({ 'data-quota-source-warnings': 'true' })).toHaveLength(0);
+    expect(text(renderer.toJSON())).not.toContain('accounts.detail_previous_usage');
+    expect(text(renderer.toJSON())).not.toContain('accounts.detail_current_forecast');
+    expect(bars).toBeGreaterThan(-1);
+    expect(chart).toBeGreaterThan(bars);
+    expect(totals).toBeGreaterThan(chart);
+  });
+
+  it('renders the daily histogram as compact bars with hover details', async () => {
     const renderer = await render();
     const chart = renderer.root.findByProps({ 'data-account-quota-daily-chart': 'true' });
+    const bars = renderer.root.findAllByProps({ 'data-account-quota-daily-bar': 'true' });
 
     expect(chart.type).toBe('ul');
     expect(chart.props.role).toBeUndefined();
     expect(chart.props['aria-label']).toBeUndefined();
-    expect(renderer.root.findAllByProps({ 'data-account-quota-daily-bar': 'true' })).toHaveLength(
-      2
-    );
-    expect(text(renderer.toJSON())).toContain('2026-08-28');
-    expect(text(renderer.toJSON())).toContain('458 JPY');
-    expect(text(renderer.toJSON())).toContain('1,901 accounts.detail_usage_tokens');
+    expect(bars).toHaveLength(2);
+    expect(bars[1].props.title).toContain('2026-08-28');
+    expect(bars[1].props.title).toContain('458 JPY');
+    expect(bars[1].props.title).toContain('1,901 accounts.detail_usage_tokens');
+    expect(bars[1].findAllByType('strong')).toHaveLength(0);
+    expect(text(renderer.toJSON())).not.toContain('Daily plugin usage');
     expect(text(renderer.toJSON())).not.toContain('1,901 tokens');
   });
 
