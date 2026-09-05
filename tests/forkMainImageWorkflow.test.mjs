@@ -17,6 +17,10 @@ describe('fork main image publication', () => {
       'org.opencontainers.image.source=https://github.com/sussdorff/CPA-Manager-Plus',
       'org.opencontainers.image.revision=${{ github.sha }}',
       'org.opencontainers.image.created=${{ steps.build_context.outputs.created }}',
+      'UPSTREAM_SOURCE: https://github.com/seakee/CPA-Manager-Plus',
+      'UPSTREAM_REVISION: 7c4cbeadaa801613e98ea6874b902844f09e59c6',
+      'UPSTREAM_SOURCE=${{ env.UPSTREAM_SOURCE }}',
+      'UPSTREAM_REVISION=${{ env.UPSTREAM_REVISION }}',
       'GITHUB_REPOSITORY',
       'GITHUB_REF}" != "refs/heads/main',
       '^[0-9a-f]{40}$',
@@ -38,6 +42,8 @@ describe('fork main image publication', () => {
       'org.opencontainers.image.source="$SOURCE"',
       'org.opencontainers.image.revision="$REVISION"',
       'org.opencontainers.image.created="$CREATED"',
+      'org.cpamp.fork.upstream.source="$UPSTREAM_SOURCE"',
+      'org.cpamp.fork.upstream.revision="$UPSTREAM_REVISION"',
     ]) {
       expect(dockerfile).toContain(required);
     }

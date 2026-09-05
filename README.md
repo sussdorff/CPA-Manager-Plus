@@ -311,7 +311,7 @@ To build locally:
 
 ```sh
 docker build -f Dockerfile.manager-server \
-  --build-arg VERSION=v1.12.5-fork.1 \
+  --build-arg VERSION=v1.12.8-fork.1 \
   --build-arg REVISION="$(git rev-parse HEAD)" \
   --build-arg SOURCE=https://github.com/<owner>/CPA-Manager-Plus \
   --build-arg UPSTREAM_REVISION="$(git rev-parse upstream/main)" \

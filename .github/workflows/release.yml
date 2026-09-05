@@ -501,7 +501,7 @@ jobs:
       UPSTREAM_SOURCE: https://github.com/seakee/CPA-Manager-Plus
       # Update this value whenever the fork is synchronized with upstream.
       # It intentionally names the upstream base, not this fork's release SHA.
-      UPSTREAM_REVISION: b1179618bad2740ae6d441be9b1b1b800379cfc3
+      UPSTREAM_REVISION: 7c4cbeadaa801613e98ea6874b902844f09e59c6
 
     steps:
       - name: Checkout release source

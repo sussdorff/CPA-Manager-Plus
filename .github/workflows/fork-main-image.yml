@@ -16,6 +16,8 @@ concurrency:
 env:
   IMAGE: ghcr.io/sussdorff/cpa-manager-plus
   SOURCE: https://github.com/sussdorff/CPA-Manager-Plus
+  UPSTREAM_SOURCE: https://github.com/seakee/CPA-Manager-Plus
+  UPSTREAM_REVISION: 7c4cbeadaa801613e98ea6874b902844f09e59c6
 
 jobs:
   publish:
@@ -96,6 +98,8 @@ jobs:
             REVISION=${{ github.sha }}
             SOURCE=${{ env.SOURCE }}
             CREATED=${{ steps.build_context.outputs.created }}
+            UPSTREAM_SOURCE=${{ env.UPSTREAM_SOURCE }}
+            UPSTREAM_REVISION=${{ env.UPSTREAM_REVISION }}
 
       - name: Record published manifest
         shell: bash
